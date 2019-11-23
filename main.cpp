@@ -1,6 +1,8 @@
 #include "measurement_class.h"
 #include "matrix_converters.h"
 
+#include "gpu_matrix_multiplier.h"
+
 #include <iostream>
 #include <chrono>
 #include <memory>
@@ -39,7 +41,7 @@ measurement_class cpu_csr_spmv_single_thread_naive (
   const size_t row_ids_bytes = 2 * matrix.meta.rows_count * sizeof (index_type);
   const size_t y_bytes = matrix.meta.rows_count * sizeof (data_type);
 
-  const size_t operations_count = matrix.meta.non_zero_count * 2; // + and * per element
+  const size_t operations_count = matrix.meta.non_zero_count * 2;
 
   return measurement_class (
     "CPU CSR",
@@ -50,7 +52,12 @@ measurement_class cpu_csr_spmv_single_thread_naive (
 
 int main ()
 {
-  auto block_matrix = gen_n_diag_bcsr<float, int> (8, 5, 2);
+  const unsigned int n_rows = 10'000'000;
+  auto block_matrix = gen_n_diag_bcsr<float, int> (n_rows, 6, 4);
   auto matrix = std::make_unique<csr_matrix_class<float, int>> (*block_matrix);
+
+  auto elapsed = gpu_csr_spmv<float, int> (*matrix, nullptr);
+  std::cout << "GPU CSR: " << elapsed.get_elapsed () << "s" << std::endl;
+
   return 0;
 }
