@@ -42,18 +42,24 @@ std::unique_ptr<bcsr_matrix_class<data_type, index_type>> gen_n_diag_bcsr (
   std::unique_ptr<bcsr_matrix_class<data_type, index_type>> matrix (
     new bcsr_matrix_class<data_type, index_type> (
       n_rows_arg, n_rows_arg, bs_arg, nnzb_arg));
-  std::fill_n (matrix->values.get (), nnzb_arg * bs_arg * bs_arg, 1.0);
 
   index_type block_id = 0;
   auto row_ptr = matrix->row_ptr.get ();
   auto columns = matrix->columns.get ();
+  auto values = matrix->values.get ();
   for (index_type row = 0; row < n_rows_arg; row++)
     {
       row_ptr[row] = row * blocks_per_row;
 
       const index_type first_column = row > blocks_per_row / 2 ? row - blocks_per_row / 2 : 0;
       for (index_type element = 0; element < blocks_per_row; element++)
-        columns[block_id++] = first_column + element;
+        {
+          const index_type element_column = first_column + element;
+          auto block_data = values + block_id * bs_arg * bs_arg;
+          for (unsigned int i = 0; i < bs_arg * bs_arg; i++)
+            block_data[i] = (static_cast<data_type> (element_column) + i) / n_rows_arg;
+          columns[block_id++] = element_column;
+        }
     }
   row_ptr[n_rows_arg] = n_rows_arg * blocks_per_row;
 
