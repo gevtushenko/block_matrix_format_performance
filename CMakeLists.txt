@@ -3,4 +3,8 @@ project(block_matrix_format_performance)
 
 set(CMAKE_CXX_STANDARD 14)
 
-add_executable(block_matrix_format_performance main.cpp measurement_class.cpp measurement_class.h)
+add_subdirectory(gpu)
+add_subdirectory(common)
+
+add_executable(block_matrix_format_performance main.cpp)
+target_link_libraries(block_matrix_format_performance common gpu)
