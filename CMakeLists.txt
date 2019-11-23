@@ -3,4 +3,4 @@ project(block_matrix_format_performance)
 
 set(CMAKE_CXX_STANDARD 14)
 
-add_executable(block_matrix_format_performance main.cpp)
+add_executable(block_matrix_format_performance main.cpp measurement_class.cpp measurement_class.h)
