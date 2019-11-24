@@ -33,7 +33,7 @@ public:
   const index_type bs {};
   const index_type nnzb {};
 
-  const std::unique_ptr<data_type> values;
+  const std::unique_ptr<data_type[]> values;
   const std::unique_ptr<index_type[]> columns;
   const std::unique_ptr<index_type[]> row_ptr;
 };
@@ -50,12 +50,27 @@ public:
     , columns (new index_type[nnz])
     , row_ptr (new index_type[n_rows + 1])
   {
-    auto brow_ptr = matrix.row_ptr.get ();
-    for (index_type block_row = 0; block_row <= matrix.n_rows; block_row++)
+    size_t offset = 0;
+    for (index_type block_row = 0; block_row < matrix.n_rows; block_row++)
       {
         for (index_type row = 0; row < matrix.bs; row++)
-          row_ptr[block_row * matrix.bs + row] = brow_ptr[block_row] * matrix.bs * matrix.bs + row * matrix.bs;
+          {
+            row_ptr[block_row * matrix.bs + row] = offset;
+            for (index_type block = matrix.row_ptr[block_row]; block < matrix.row_ptr[block_row + 1]; block++)
+              {
+                for (index_type column = 0; column < matrix.bs; column++)
+                  {
+                    index_type actual_column = matrix.columns[block] * matrix.bs + column;
+                    data_type value = matrix.values[block * matrix.bs * matrix.bs + row * matrix.bs + column];
+
+                    columns[offset] = actual_column;
+                    values[offset++] = value;
+                  }
+              }
+          }
       }
+
+    row_ptr[n_rows] = offset;
   }
 
 public:
@@ -64,7 +79,7 @@ public:
 
   const index_type nnz {};
 
-  const std::unique_ptr<data_type> values;
+  const std::unique_ptr<data_type[]> values;
   const std::unique_ptr<index_type[]> columns;
   const std::unique_ptr<index_type[]> row_ptr;
 };

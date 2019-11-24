@@ -5,9 +5,15 @@
 
 #include <cuda_runtime.h>
 
+#include <functional>
 #include <iostream>
+#include <optional>
 #include <chrono>
 #include <memory>
+
+#include "fmt/format.h"
+#include "fmt/color.h"
+#include "fmt/core.h"
 
 template<typename data_type, typename index_type>
 measurement_class cpu_csr_spmv_single_thread_naive (
@@ -15,15 +21,16 @@ measurement_class cpu_csr_spmv_single_thread_naive (
   data_type *x,
   data_type *y)
 {
-  fill_n (x, matrix.meta.cols_count, 1.0);
+  std::fill_n (x, matrix.n_cols, 1.0);
+  std::fill_n (y, matrix.n_rows, 0.0);
 
   const auto row_ptr = matrix.row_ptr.get ();
   const auto col_ids = matrix.columns.get ();
-  const auto data = matrix.data.get ();
+  const auto data = matrix.values.get ();
 
   auto begin = std::chrono::system_clock::now ();
 
-  for (index_type row = 0; row < matrix.meta.rows_count; row++)
+  for (index_type row = 0; row < matrix.n_rows; row++)
     {
       const auto row_start = row_ptr[row];
       const auto row_end = row_ptr[row + 1];
@@ -37,13 +44,13 @@ measurement_class cpu_csr_spmv_single_thread_naive (
   auto end = std::chrono::system_clock::now ();
   const double elapsed = std::chrono::duration<double> (end - begin).count ();
 
-  const size_t data_bytes = matrix.meta.non_zero_count * sizeof (data_type);
-  const size_t x_bytes = matrix.meta.non_zero_count * sizeof (data_type);
-  const size_t col_ids_bytes = matrix.meta.non_zero_count * sizeof (index_type);
-  const size_t row_ids_bytes = 2 * matrix.meta.rows_count * sizeof (index_type);
-  const size_t y_bytes = matrix.meta.rows_count * sizeof (data_type);
+  const size_t data_bytes = matrix.nnz * sizeof (data_type);
+  const size_t x_bytes = matrix.nnz * sizeof (data_type);
+  const size_t col_ids_bytes = matrix.nnz * sizeof (index_type);
+  const size_t row_ids_bytes = 2 * matrix.n_rows * sizeof (index_type);
+  const size_t y_bytes = matrix.n_rows * sizeof (data_type);
 
-  const size_t operations_count = matrix.meta.non_zero_count * 2;
+  const size_t operations_count = matrix.nnz * 2;
 
   return measurement_class (
     "CPU CSR",
@@ -56,6 +63,52 @@ double size_to_gb (size_t size)
 {
   return static_cast<double> (size) / 1024 / 1024/ 1024;
 }
+
+class time_printer
+{
+  double reference {};
+  std::optional<double> parallel_reference;
+
+  /// Settings
+  const unsigned int time_width = 20;
+  const unsigned int time_precision = 6;
+
+public:
+  explicit time_printer (
+    double reference_time,
+    std::optional<double> parallel_ref = std::nullopt)
+    : reference (reference_time)
+    , parallel_reference (move (parallel_ref))
+  {
+  }
+
+  void add_time (double time, fmt::color color) const
+  {
+    fmt::print (fmt::fg (color), "{2:<{0}.{1}g}   ", time_width, time_precision, time);
+  }
+
+  void print_time (const measurement_class &measurement) const
+  {
+    const double time = measurement.get_elapsed ();
+    fmt::print (fmt::fg (fmt::color::yellow), "{0:<70}", measurement.get_format ());
+    fmt::print (":  ");
+    add_time (time, fmt::color::white);
+    add_time (speedup (time), fmt::color::green);
+    if (parallel_reference)
+      add_time (parallel_speedup (time), fmt::color::green_yellow);
+    fmt::print ("\n");
+  }
+
+  double speedup (double time) const
+  {
+    return reference / time;
+  }
+
+  double parallel_speedup (double time) const
+  {
+    return *parallel_reference / time;
+  }
+};
 
 template <typename data_type, typename index_type>
 void perform_measurements (
@@ -76,19 +129,38 @@ void perform_measurements (
   auto block_matrix = gen_n_diag_bcsr<data_type, index_type> (n_rows, blocks_per_row, bs);
   auto matrix = std::make_unique<csr_matrix_class<data_type, index_type>> (*block_matrix);
 
-  auto elapsed_csr = gpu_csr_spmv<data_type, index_type> (*matrix, nullptr);
-  std::cout << "GPU CSR: " << elapsed_csr.get_elapsed () << "s" << std::endl;
+  auto measure_multiple_times = [&] (const std::function<measurement_class(bool)> &action)
+  {
+    measurement_class result;
+    const unsigned int measurements_count = 20;
+    for (unsigned int measurement_id = 0; measurement_id < measurements_count; measurement_id++)
+      result += action (measurement_id == 0);
+    result.finalize ();
+    return result;
+  };
+
+  std::unique_ptr<data_type> reference_answer (new data_type[n_rows * bs]);
+  std::unique_ptr<data_type> x (new data_type[n_rows * bs]);
+  auto cpu_naive = measure_multiple_times ([&] (bool) {
+    return cpu_csr_spmv_single_thread_naive (*matrix, x.get (), reference_answer.get ());
+  });
+
+  time_printer single_core_timer (cpu_naive.get_elapsed ());
+  single_core_timer.print_time (cpu_naive);
+
+  auto gpu_elapsed_csr = gpu_csr_spmv<data_type, index_type> (*matrix, nullptr);
+  single_core_timer.print_time (gpu_elapsed_csr);
 
   auto bcsr_elapsed = gpu_bcsr_spmv<data_type, index_type> (*block_matrix, nullptr);
 
   for (auto &elapsed: bcsr_elapsed)
-    std::cout << elapsed.get_format () << " " << elapsed.get_elapsed () << "s" << std::endl;
+    single_core_timer.print_time (elapsed);
 }
 
 int main ()
 {
   cudaSetDevice (1);
-  perform_measurements<float, int> (32, 100'000, 6);
+  perform_measurements<float, int> (32, 50'000, 6);
 
   return 0;
 }

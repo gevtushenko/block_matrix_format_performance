@@ -1,3 +1,5 @@
+#include <cuda_runtime.h>
+
 #include "gpu_matrix_multiplier.h"
 
 template<class T>
@@ -89,6 +91,10 @@ measurement_class gpu_csr_spmv (
   cudaMalloc (&d_row_ptr, row_ptr_size * sizeof (index_type));
   cudaMalloc (&d_columns, columns_size * sizeof (index_type));
 
+  cudaMemcpy (d_values, matrix.values.get (), matrix_size * sizeof (data_type), cudaMemcpyHostToDevice);
+  cudaMemcpy (d_columns, matrix.columns.get (), columns_size * sizeof (index_type), cudaMemcpyHostToDevice);
+  cudaMemcpy (d_row_ptr, matrix.row_ptr.get (), row_ptr_size * sizeof (index_type), cudaMemcpyHostToDevice);
+
   {
     dim3 block_size = dim3 (512);
     dim3 grid_size {};
@@ -108,7 +114,7 @@ measurement_class gpu_csr_spmv (
     dim3 block_size = dim3 (512);
     dim3 grid_size {};
 
-    grid_size.x = (x_size + block_size.x - 1) / block_size.x;
+    grid_size.x = (matrix.n_rows + block_size.x - 1) / block_size.x;
 
     csr_spmv_kernel<data_type, index_type> <<<grid_size, block_size>>> (matrix.n_rows, d_columns, d_row_ptr, d_values, d_x, d_y);
   }
@@ -225,7 +231,7 @@ std::vector<measurement_class> gpu_bcsr_spmv (
   std::vector<measurement_class> results;
 
   const index_type matrix_size = matrix.nnzb * matrix.bs * matrix.bs;
-  const index_type columns_size = matrix_size;
+  const index_type columns_size = matrix.nnzb;
   const index_type row_ptr_size = matrix.n_rows + 1;
   const index_type x_size = matrix.n_cols * matrix.bs;
   const index_type y_size = matrix.n_rows * matrix.bs;
@@ -243,6 +249,10 @@ std::vector<measurement_class> gpu_bcsr_spmv (
 
   cudaMalloc (&d_row_ptr, row_ptr_size * sizeof (index_type));
   cudaMalloc (&d_columns, columns_size * sizeof (index_type));
+
+  cudaMemcpy (d_values, matrix.values.get (), matrix_size * sizeof (data_type), cudaMemcpyHostToDevice);
+  cudaMemcpy (d_columns, matrix.columns.get (), columns_size * sizeof (index_type), cudaMemcpyHostToDevice);
+  cudaMemcpy (d_row_ptr, matrix.row_ptr.get (), row_ptr_size * sizeof (index_type), cudaMemcpyHostToDevice);
 
   {
     dim3 block_size = dim3 (512);
@@ -264,7 +274,7 @@ std::vector<measurement_class> gpu_bcsr_spmv (
       dim3 block_size = dim3 (matrix.bs);
       dim3 grid_size {};
 
-      grid_size.x = (matrix.n_rows + block_size.x - 1) / block_size.x;
+      grid_size.x = (matrix.n_rows * matrix.bs + block_size.x - 1) / block_size.x;
 
       bcsr_spmv_kernel_block_per_block_row_thread_per_row_row_major_matrix<data_type, index_type> <<<grid_size, block_size>>> (
         matrix.bs, d_columns, d_row_ptr, d_values, d_x, d_y);
@@ -295,7 +305,7 @@ std::vector<measurement_class> gpu_bcsr_spmv (
       dim3 block_size = dim3 (matrix.bs);
       dim3 grid_size {};
 
-      grid_size.x = (matrix.n_rows + block_size.x - 1) / block_size.x;
+      grid_size.x = (matrix.n_rows * matrix.bs + block_size.x - 1) / block_size.x;
 
       bcsr_spmv_kernel_block_per_block_row_thread_per_row_column_major_matrix<data_type, index_type> <<<grid_size, block_size>>> (
         matrix.bs, d_columns, d_row_ptr, d_values, d_x, d_y);
@@ -326,7 +336,7 @@ std::vector<measurement_class> gpu_bcsr_spmv (
       dim3 block_size = dim3 (matrix.bs);
       dim3 grid_size {};
 
-      grid_size.x = (matrix.n_rows + block_size.x - 1) / block_size.x;
+      grid_size.x = (matrix.n_rows * matrix.bs  + block_size.x - 1) / block_size.x;
 
       bcsr_spmv_kernel_block_per_block_row_thread_per_row_column_major_matrix_coal_x<data_type, index_type> <<<grid_size, block_size, block_size.x * sizeof (data_type)>>> (
         matrix.bs, d_columns, d_row_ptr, d_values, d_x, d_y);
