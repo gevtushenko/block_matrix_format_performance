@@ -148,10 +148,10 @@ void perform_measurements (
   time_printer single_core_timer (cpu_naive.get_elapsed ());
   single_core_timer.print_time (cpu_naive);
 
-  auto gpu_elapsed_csr = gpu_csr_spmv<data_type, index_type> (*matrix, nullptr);
+  auto gpu_elapsed_csr = gpu_csr_spmv<data_type, index_type> (*matrix, reference_answer.get ());
   single_core_timer.print_time (gpu_elapsed_csr);
 
-  auto bcsr_elapsed = gpu_bcsr_spmv<data_type, index_type> (*block_matrix, nullptr);
+  auto bcsr_elapsed = gpu_bcsr_spmv<data_type, index_type> (*block_matrix, reference_answer.get ());
 
   for (auto &elapsed: bcsr_elapsed)
     single_core_timer.print_time (elapsed);

@@ -129,6 +129,11 @@ measurement_class gpu_csr_spmv (
   cudaEventDestroy (start);
   cudaEventDestroy (stop);
 
+  std::unique_ptr<data_type[]> cpu_y (new data_type[y_size]);
+  cudaMemcpy (cpu_y.get (), d_y, y_size * sizeof (data_type), cudaMemcpyDeviceToHost);
+
+  compare_results (y_size, reference_y, cpu_y.get ());
+
   cudaFree (d_values);
   cudaFree (d_x);
   cudaFree (d_y);
@@ -225,7 +230,7 @@ __global__ void bcsr_spmv_kernel_block_per_block_row_thread_per_row_column_major
 
 template <typename data_type, typename index_type>
 std::vector<measurement_class> gpu_bcsr_spmv (
-  const bcsr_matrix_class<data_type, index_type> &matrix,
+  bcsr_matrix_class<data_type, index_type> &matrix,
   const data_type *reference_y)
 {
   std::vector<measurement_class> results;
@@ -293,6 +298,22 @@ std::vector<measurement_class> gpu_bcsr_spmv (
     results.emplace_back ("GPU BCSR (row major, block per block row, thread per row)", elapsed, 0, 0);
   }
 
+  std::unique_ptr<data_type[]> cpu_y (new data_type[y_size]);
+  cudaMemcpy (cpu_y.get (), d_y, y_size * sizeof (data_type), cudaMemcpyDeviceToHost);
+
+  compare_results (y_size, reference_y, cpu_y.get ());
+
+  {
+    dim3 block_size = dim3 (512);
+    dim3 grid_size {};
+
+    grid_size.x = (y_size + block_size.x - 1) / block_size.x;
+    fill_vector<data_type><<<grid_size, block_size>>> (y_size, d_y, 1.0);
+  }
+
+  matrix.transpose_blocks ();
+  cudaMemcpy (d_values, matrix.values.get (), matrix_size * sizeof (data_type), cudaMemcpyHostToDevice);
+
   {
     cudaEvent_t start, stop;
     cudaEventCreate (&start);
@@ -322,6 +343,18 @@ std::vector<measurement_class> gpu_bcsr_spmv (
     cudaEventDestroy (stop);
 
     results.emplace_back ("GPU BCSR (column major, block per block row, thread per row)", elapsed, 0, 0);
+  }
+
+  std::fill_n (cpu_y.get (), y_size, 0.0);
+  cudaMemcpy (cpu_y.get (), d_y, y_size * sizeof (data_type), cudaMemcpyDeviceToHost);
+  compare_results (y_size, reference_y, cpu_y.get ());
+
+  {
+    dim3 block_size = dim3 (512);
+    dim3 grid_size {};
+
+    grid_size.x = (y_size + block_size.x - 1) / block_size.x;
+    fill_vector<data_type><<<grid_size, block_size>>> (y_size, d_y, 1.0);
   }
 
   {
@@ -355,6 +388,10 @@ std::vector<measurement_class> gpu_bcsr_spmv (
     results.emplace_back ("GPU BCSR (column major, block per block row, thread per row, coal x)", elapsed, 0, 0);
   }
 
+  std::fill_n (cpu_y.get (), y_size, 0.0);
+  cudaMemcpy (cpu_y.get (), d_y, y_size * sizeof (data_type), cudaMemcpyDeviceToHost);
+  compare_results (y_size, reference_y, cpu_y.get ());
+
   cudaFree (d_values);
   cudaFree (d_x);
   cudaFree (d_y);
@@ -366,7 +403,7 @@ std::vector<measurement_class> gpu_bcsr_spmv (
 
 #define INSTANTIATE(DTYPE,ITYPE) \
   template measurement_class gpu_csr_spmv (const csr_matrix_class<DTYPE, ITYPE> &matrix, const DTYPE *reference_y); \
-  template std::vector<measurement_class> gpu_bcsr_spmv (const bcsr_matrix_class<DTYPE, ITYPE> &matrix, const DTYPE *reference_y);
+  template std::vector<measurement_class> gpu_bcsr_spmv (bcsr_matrix_class<DTYPE, ITYPE> &matrix, const DTYPE *reference_y);
 
 INSTANTIATE (float,int)
 

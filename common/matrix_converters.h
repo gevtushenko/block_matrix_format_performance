@@ -5,6 +5,7 @@
 #ifndef BLOCK_MATRIX_FORMAT_PERFORMANCE_MATRIX_CONVERTERS_H
 #define BLOCK_MATRIX_FORMAT_PERFORMANCE_MATRIX_CONVERTERS_H
 
+#include <algorithm>
 #include <memory>
 
 template <typename data_type, typename index_type>
@@ -24,6 +25,24 @@ public:
     , columns (new index_type[nnzb])
     , row_ptr (new index_type[n_rows + 1])
   {
+  }
+
+  void transpose_blocks ()
+  {
+    std::unique_ptr<data_type[]> buffer (new data_type[bs * bs]);
+
+    for (index_type row = 0; row < n_rows; row++)
+      {
+        for (index_type block = row_ptr[row]; block < row_ptr[row + 1]; block++)
+          {
+            data_type *block_data = values.get () + bs * bs * block;
+            std::copy_n (block_data, bs * bs, buffer.get ());
+
+            for (unsigned int i = 0; i < bs; i++)
+              for (unsigned int j = 0; j < bs; j++)
+                block_data[j * bs + i] = buffer[i * bs + j];
+          }
+      }
   }
 
 public:
