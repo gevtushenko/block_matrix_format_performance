@@ -3,6 +3,8 @@
 
 #include "gpu_matrix_multiplier.h"
 
+#include <cuda_runtime.h>
+
 #include <iostream>
 #include <chrono>
 #include <memory>
@@ -50,19 +52,43 @@ measurement_class cpu_csr_spmv_single_thread_naive (
     operations_count);
 }
 
-int main ()
+double size_to_gb (size_t size)
 {
-  const unsigned int n_rows = 100'000;
-  auto block_matrix = gen_n_diag_bcsr<float, int> (n_rows, 6, 16);
-  auto matrix = std::make_unique<csr_matrix_class<float, int>> (*block_matrix);
+  return static_cast<double> (size) / 1024 / 1024/ 1024;
+}
 
-  auto elapsed_csr = gpu_csr_spmv<float, int> (*matrix, nullptr);
+template <typename data_type, typename index_type>
+void perform_measurements (
+  index_type bs,
+  index_type n_rows,
+  index_type blocks_per_row
+  )
+{
+  const size_t nnz = n_rows * blocks_per_row * bs * bs;
+  const double matrix_and_vectors_data_size = static_cast<double> (nnz + 2 * n_rows * bs) * sizeof (data_type);
+
+  const size_t csr_extra_data_size = (nnz + n_rows * bs + bs) * sizeof (index_type);
+  const size_t bcsr_extra_data_size = (n_rows * blocks_per_row + n_rows + 1) * sizeof (index_type);
+
+  std::cout << "Required memory: \n"
+            << "\tCSR  => DATA: " << size_to_gb (matrix_and_vectors_data_size) << " GB; EXTRA: " << size_to_gb (csr_extra_data_size) << "\n"
+            << "\tBCSR => DATA: " << size_to_gb (matrix_and_vectors_data_size) << " GB; EXTRA: " << size_to_gb (bcsr_extra_data_size) << std::endl;
+  auto block_matrix = gen_n_diag_bcsr<data_type, index_type> (n_rows, blocks_per_row, bs);
+  auto matrix = std::make_unique<csr_matrix_class<data_type, index_type>> (*block_matrix);
+
+  auto elapsed_csr = gpu_csr_spmv<data_type, index_type> (*matrix, nullptr);
   std::cout << "GPU CSR: " << elapsed_csr.get_elapsed () << "s" << std::endl;
 
-  auto bcsr_elapsed = gpu_bcsr_spmv<float, int> (*block_matrix, nullptr);
+  auto bcsr_elapsed = gpu_bcsr_spmv<data_type, index_type> (*block_matrix, nullptr);
 
   for (auto &elapsed: bcsr_elapsed)
     std::cout << elapsed.get_format () << " " << elapsed.get_elapsed () << "s" << std::endl;
+}
+
+int main ()
+{
+  cudaSetDevice (1);
+  perform_measurements<float, int> (32, 100'000, 6);
 
   return 0;
 }

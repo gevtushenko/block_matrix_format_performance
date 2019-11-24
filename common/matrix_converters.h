@@ -43,16 +43,19 @@ class csr_matrix_class
 {
 public:
   explicit csr_matrix_class (const bcsr_matrix_class<data_type, index_type> &matrix)
-    : n_rows (matrix.n_rows)
-    , n_cols (matrix.n_cols)
+    : n_rows (matrix.n_rows * matrix.bs)
+    , n_cols (matrix.n_cols * matrix.bs)
     , nnz (matrix.nnzb * matrix.bs * matrix.bs)
     , values (new data_type[nnz])
     , columns (new index_type[nnz])
     , row_ptr (new index_type[n_rows + 1])
   {
     auto brow_ptr = matrix.row_ptr.get ();
-    for (index_type row = 0; row <= n_rows; row++)
-      row_ptr[row] = brow_ptr[row] * matrix.bs;
+    for (index_type block_row = 0; block_row <= matrix.n_rows; block_row++)
+      {
+        for (index_type row = 0; row < matrix.bs; row++)
+          row_ptr[block_row * matrix.bs + row] = brow_ptr[block_row] * matrix.bs * matrix.bs + row * matrix.bs;
+      }
   }
 
 public:
