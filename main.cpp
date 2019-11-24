@@ -52,12 +52,17 @@ measurement_class cpu_csr_spmv_single_thread_naive (
 
 int main ()
 {
-  const unsigned int n_rows = 10'000'000;
-  auto block_matrix = gen_n_diag_bcsr<float, int> (n_rows, 6, 4);
+  const unsigned int n_rows = 100'000;
+  auto block_matrix = gen_n_diag_bcsr<float, int> (n_rows, 6, 16);
   auto matrix = std::make_unique<csr_matrix_class<float, int>> (*block_matrix);
 
-  auto elapsed = gpu_csr_spmv<float, int> (*matrix, nullptr);
-  std::cout << "GPU CSR: " << elapsed.get_elapsed () << "s" << std::endl;
+  auto elapsed_csr = gpu_csr_spmv<float, int> (*matrix, nullptr);
+  std::cout << "GPU CSR: " << elapsed_csr.get_elapsed () << "s" << std::endl;
+
+  auto bcsr_elapsed = gpu_bcsr_spmv<float, int> (*block_matrix, nullptr);
+
+  for (auto &elapsed: bcsr_elapsed)
+    std::cout << elapsed.get_format () << " " << elapsed.get_elapsed () << "s" << std::endl;
 
   return 0;
 }
