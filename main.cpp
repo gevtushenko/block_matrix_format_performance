@@ -90,7 +90,7 @@ public:
   void print_time (const measurement_class &measurement) const
   {
     const double time = measurement.get_elapsed ();
-    fmt::print (fmt::fg (fmt::color::yellow), "\t{0:<70}", measurement.get_format ());
+    fmt::print (fmt::fg (fmt::color::yellow), "\t{0:<80}", measurement.get_format ());
     fmt::print (":  ");
     add_time (time, fmt::color::white);
     add_time (speedup (time), fmt::color::green);

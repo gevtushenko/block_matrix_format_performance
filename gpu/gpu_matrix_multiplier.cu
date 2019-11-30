@@ -334,9 +334,73 @@ __global__ void bcsr_spmv_kernel_block_per_block_row_thread_per_row_column_major
     }
 }
 
+template <typename data_type, typename index_type, index_type bs>
+__global__ void bcsr_spmv_kernel_block_per_block_row_thread_per_row_column_major_matrix_template (
+  index_type n_block_rows,
+  const index_type * __restrict__ col_ids,
+  const index_type * __restrict__ row_ptr,
+  const data_type * __restrict__ data,
+  const data_type * __restrict__ x,
+  data_type * __restrict__ y)
+{
+  const index_type idx = blockIdx.x * blockDim.x + threadIdx.x;
+  const index_type row = idx % bs;
+  const index_type block_row = idx / bs;
+  const index_type first_block = row_ptr[block_row];
+  const index_type last_block = row_ptr[block_row + 1];
+
+  if (row < bs && block_row < n_block_rows)
+    {
+      data_type local_out = 0.0;
+
+      for (index_type block = first_block; block < last_block; block++)
+        {
+          const index_type first_col = col_ids[block] * bs;
+          for (index_type col = 0; col < bs; col++)
+            local_out += x[first_col + col] * data[block * bs * bs + col * bs + row];
+        }
+
+      y[block_row * bs + row] = local_out;
+    }
+}
+
 template <typename data_type, typename index_type>
 __global__ void bcsr_spmv_kernel_block_per_block_row_thread_per_row_column_major_matrix_coal_x (
   index_type bs,
+  const index_type * __restrict__ col_ids,
+  const index_type * __restrict__ row_ptr,
+  const data_type * __restrict__ data,
+  const data_type * __restrict__ x,
+  data_type *y)
+{
+  const index_type idx = blockIdx.x * blockDim.x + threadIdx.x;
+  const index_type row = idx % bs;
+  const index_type block_row = idx / bs;
+  const index_type first_block = row_ptr[block_row];
+  const index_type last_block = row_ptr[block_row + 1];
+
+  data_type *cache_x = shared_memory<data_type> ();
+
+  cache_x[threadIdx.x] = 0.0;
+  data_type local_out = 0.0;
+
+  for (index_type block = first_block; block < last_block; block++)
+    {
+      __syncwarp ();
+      if (threadIdx.x < bs)
+        cache_x[threadIdx.x] = x[col_ids[block] * bs + threadIdx.x];
+      __syncwarp ();
+
+      for (index_type col = 0; col < bs; col++)
+        local_out += cache_x[col] * data[block * bs * bs + col * bs + row];
+    }
+
+  if (row < bs)
+    y[block_row * bs + row] = local_out;
+}
+
+template <typename data_type, typename index_type, index_type bs>
+__global__ void bcsr_spmv_kernel_block_per_block_row_thread_per_row_column_major_matrix_coal_x_template (
   const index_type * __restrict__ col_ids,
   const index_type * __restrict__ row_ptr,
   const data_type * __restrict__ data,
@@ -743,6 +807,14 @@ std::vector<measurement_class> gpu_bcsr_spmv (
   }
 
   {
+    dim3 block_size = dim3 (512);
+    dim3 grid_size {};
+
+    grid_size.x = (y_size + block_size.x - 1) / block_size.x;
+    fill_vector<data_type><<<grid_size, block_size>>> (y_size, d_y, 1.0);
+  }
+
+  {
     cudaEvent_t start, stop;
     cudaEventCreate (&start);
     cudaEventCreate (&stop);
@@ -794,6 +866,56 @@ std::vector<measurement_class> gpu_bcsr_spmv (
     cudaEventRecord (start);
 
     {
+      dim3 block_size = 512;
+      dim3 grid_size {};
+
+      grid_size.x = (matrix.n_rows * matrix.bs + block_size.x - 1) / block_size.x;
+
+      switch (matrix.bs)
+      {
+        case  1: bcsr_spmv_kernel_block_per_block_row_thread_per_row_column_major_matrix_template<data_type, index_type, 1> <<<grid_size, block_size>>> (matrix.n_rows, d_columns, d_row_ptr, d_values, d_x, d_y); break;
+        case  2: bcsr_spmv_kernel_block_per_block_row_thread_per_row_column_major_matrix_template<data_type, index_type, 2> <<<grid_size, block_size>>> (matrix.n_rows, d_columns, d_row_ptr, d_values, d_x, d_y); break;
+        case  4: bcsr_spmv_kernel_block_per_block_row_thread_per_row_column_major_matrix_template<data_type, index_type, 4> <<<grid_size, block_size>>> (matrix.n_rows, d_columns, d_row_ptr, d_values, d_x, d_y); break;
+        case  8: bcsr_spmv_kernel_block_per_block_row_thread_per_row_column_major_matrix_template<data_type, index_type, 8> <<<grid_size, block_size>>> (matrix.n_rows, d_columns, d_row_ptr, d_values, d_x, d_y); break;
+        case 16: bcsr_spmv_kernel_block_per_block_row_thread_per_row_column_major_matrix_template<data_type, index_type,16> <<<grid_size, block_size>>> (matrix.n_rows, d_columns, d_row_ptr, d_values, d_x, d_y); break;
+        case 32: bcsr_spmv_kernel_block_per_block_row_thread_per_row_column_major_matrix_template<data_type, index_type,32> <<<grid_size, block_size>>> (matrix.n_rows, d_columns, d_row_ptr, d_values, d_x, d_y); break;
+      }
+    }
+
+    cudaEventRecord (stop);
+    cudaEventSynchronize (stop);
+
+    float milliseconds = 0;
+    cudaEventElapsedTime (&milliseconds, start, stop);
+    const double elapsed = milliseconds / 1000;
+
+    cudaEventDestroy (start);
+    cudaEventDestroy (stop);
+
+    results.emplace_back ("GPU BCSR (column major, block per block row, thread per row, template)", elapsed, 0, 0);
+  }
+
+  std::fill_n (cpu_y.get (), y_size, 0.0);
+  cudaMemcpy (cpu_y.get (), d_y, y_size * sizeof (data_type), cudaMemcpyDeviceToHost);
+  compare_results (y_size, reference_y, cpu_y.get ());
+
+  {
+    dim3 block_size = dim3 (512);
+    dim3 grid_size {};
+
+    grid_size.x = (y_size + block_size.x - 1) / block_size.x;
+    fill_vector<data_type><<<grid_size, block_size>>> (y_size, d_y, 1.0);
+  }
+
+  {
+    cudaEvent_t start, stop;
+    cudaEventCreate (&start);
+    cudaEventCreate (&stop);
+
+    cudaDeviceSynchronize ();
+    cudaEventRecord (start);
+
+    {
       dim3 block_size = dim3 (32);
       dim3 grid_size {};
 
@@ -814,6 +936,56 @@ std::vector<measurement_class> gpu_bcsr_spmv (
     cudaEventDestroy (stop);
 
     results.emplace_back ("GPU BCSR (column major, block per block row, thread per row, coal x)", elapsed, 0, 0);
+  }
+
+  std::fill_n (cpu_y.get (), y_size, 0.0);
+  cudaMemcpy (cpu_y.get (), d_y, y_size * sizeof (data_type), cudaMemcpyDeviceToHost);
+  compare_results (y_size, reference_y, cpu_y.get ());
+
+  {
+    dim3 block_size = dim3 (512);
+    dim3 grid_size {};
+
+    grid_size.x = (y_size + block_size.x - 1) / block_size.x;
+    fill_vector<data_type><<<grid_size, block_size>>> (y_size, d_y, 1.0);
+  }
+
+  {
+    cudaEvent_t start, stop;
+    cudaEventCreate (&start);
+    cudaEventCreate (&stop);
+
+    cudaDeviceSynchronize ();
+    cudaEventRecord (start);
+
+    {
+      dim3 block_size = dim3 (32);
+      dim3 grid_size {};
+
+      grid_size.x = (matrix.n_rows * matrix.bs  + block_size.x - 1) / block_size.x;
+
+      switch (matrix.bs)
+      {
+        case  1: bcsr_spmv_kernel_block_per_block_row_thread_per_row_column_major_matrix_coal_x_template<data_type, index_type, 1> <<<grid_size, block_size, block_size.x * sizeof (data_type)>>> (d_columns, d_row_ptr, d_values, d_x, d_y); break;
+        case  2: bcsr_spmv_kernel_block_per_block_row_thread_per_row_column_major_matrix_coal_x_template<data_type, index_type, 2> <<<grid_size, block_size, block_size.x * sizeof (data_type)>>> (d_columns, d_row_ptr, d_values, d_x, d_y); break;
+        case  4: bcsr_spmv_kernel_block_per_block_row_thread_per_row_column_major_matrix_coal_x_template<data_type, index_type, 4> <<<grid_size, block_size, block_size.x * sizeof (data_type)>>> (d_columns, d_row_ptr, d_values, d_x, d_y); break;
+        case  8: bcsr_spmv_kernel_block_per_block_row_thread_per_row_column_major_matrix_coal_x_template<data_type, index_type, 8> <<<grid_size, block_size, block_size.x * sizeof (data_type)>>> (d_columns, d_row_ptr, d_values, d_x, d_y); break;
+        case 16: bcsr_spmv_kernel_block_per_block_row_thread_per_row_column_major_matrix_coal_x_template<data_type, index_type,16> <<<grid_size, block_size, block_size.x * sizeof (data_type)>>> (d_columns, d_row_ptr, d_values, d_x, d_y); break;
+        case 32: bcsr_spmv_kernel_block_per_block_row_thread_per_row_column_major_matrix_coal_x_template<data_type, index_type,32> <<<grid_size, block_size, block_size.x * sizeof (data_type)>>> (d_columns, d_row_ptr, d_values, d_x, d_y); break;
+      }
+    }
+
+    cudaEventRecord (stop);
+    cudaEventSynchronize (stop);
+
+    float milliseconds = 0;
+    cudaEventElapsedTime (&milliseconds, start, stop);
+    const double elapsed = milliseconds / 1000;
+
+    cudaEventDestroy (start);
+    cudaEventDestroy (stop);
+
+    results.emplace_back ("GPU BCSR (column major, block per block row, thread per row, coal x, template)", elapsed, 0, 0);
   }
 
   std::fill_n (cpu_y.get (), y_size, 0.0);
