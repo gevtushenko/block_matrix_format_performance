@@ -122,7 +122,14 @@ std::unique_ptr<bcsr_matrix_class<data_type, index_type>> gen_n_diag_bcsr (
     {
       row_ptr[row] = row * blocks_per_row;
 
-      const index_type first_column = row > blocks_per_row / 2 ? row - blocks_per_row / 2 : 0;
+      const index_type first_column = [&] () {
+        if (row < blocks_per_row / 2)
+          return 0;
+        if (row > n_rows_arg - blocks_per_row)
+          return n_rows_arg - blocks_per_row;
+
+        return row - blocks_per_row / 2;
+      } ();
       for (index_type element = 0; element < blocks_per_row; element++)
         {
           const index_type element_column = first_column + element;

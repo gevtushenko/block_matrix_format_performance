@@ -357,6 +357,65 @@ __global__ void bcsr_spmv_kernel_block_per_block_row_thread_per_row_column_major
   y[block_row * bs + row] = local_out;
 }
 
+template <typename index_type>
+__device__ index_type round_up_to_power_of_two (index_type v)
+{
+  v--;
+  v |= v >> 1;
+  v |= v >> 2;
+  v |= v >> 4;
+  v |= v >> 8;
+  v |= v >> 16;
+  v++;
+
+  return v;
+}
+
+template <typename data_type, typename index_type>
+__global__ void bcsr_spmv_kernel_column_by_column (
+  index_type bs,
+  const index_type * __restrict__ col_ids,
+  const index_type * __restrict__ row_ptr,
+  const data_type * __restrict__ data,
+  const data_type * __restrict__ x,
+  data_type * __restrict__ y)
+{
+  const index_type idx = blockIdx.x * blockDim.x + threadIdx.x;
+  const index_type lane = idx / 32;
+  const index_type block_row = idx % 32; ///< Warp per block row
+  const index_type first_block = row_ptr[block_row];
+  const index_type last_block = row_ptr[block_row + 1];
+
+  index_type col = first_block * bs + lane / bs;
+  index_type r = lane % bs;
+
+  data_type *partial_sums = shared_memory<data_type> (); ///< Size is equal to blockDim.x * sizeof(data_type)
+
+  data_type local_out = 0.0;
+
+  for (; col < last_block * bs; col += 32 / bs)
+    {
+      const index_type block = col / bs;
+      const index_type c = col % bs;
+
+      const data_type value = data[block * bs * bs + c * bs + r];
+      const data_type x_value = x[col_ids[block] + c];
+      local_out += x_value * value;
+    }
+
+  partial_sums[threadIdx.x] = local_out;
+
+  for (index_type stride = round_up_to_power_of_two((32 / bs) / 2); stride > 0; stride /= 2)
+    {
+      __syncthreads ();
+      if ((lane < stride * bs) && (lane + stride * bs < 32))
+        partial_sums[threadIdx.x] += partial_sums[threadIdx.x + stride * bs];
+    }
+
+    if (lane < bs)
+    y[block_row * bs + lane] = partial_sums[threadIdx.x];
+}
+
 void cusparse_bsrmv (
   cusparseHandle_t  &handle,
   cusparseMatDescr_t  &descr_A,
@@ -651,6 +710,49 @@ std::vector<measurement_class> gpu_bcsr_spmv (
     cudaEventDestroy (stop);
 
     results.emplace_back ("GPU BCSR (column major, block per block row, thread per row, coal x)", elapsed, 0, 0);
+  }
+
+  std::fill_n (cpu_y.get (), y_size, 0.0);
+  cudaMemcpy (cpu_y.get (), d_y, y_size * sizeof (data_type), cudaMemcpyDeviceToHost);
+  compare_results (y_size, reference_y, cpu_y.get ());
+
+  {
+    dim3 block_size = dim3 (512);
+    dim3 grid_size {};
+
+    grid_size.x = (y_size + block_size.x - 1) / block_size.x;
+    fill_vector<data_type><<<grid_size, block_size>>> (y_size, d_y, 1.0);
+  }
+
+  {
+    cudaEvent_t start, stop;
+    cudaEventCreate (&start);
+    cudaEventCreate (&stop);
+
+    cudaDeviceSynchronize ();
+    cudaEventRecord (start);
+
+    {
+      dim3 block_size = dim3 (matrix.bs);
+      dim3 grid_size {};
+
+      grid_size.x = (matrix.n_rows * matrix.bs  + block_size.x - 1) / block_size.x;
+
+      bcsr_spmv_kernel_column_by_column<data_type, index_type> <<<grid_size, block_size, block_size.x * sizeof (data_type)>>> (
+        matrix.bs, d_columns, d_row_ptr, d_values, d_x, d_y);
+    }
+
+    cudaEventRecord (stop);
+    cudaEventSynchronize (stop);
+
+    float milliseconds = 0;
+    cudaEventElapsedTime (&milliseconds, start, stop);
+    const double elapsed = milliseconds / 1000;
+
+    cudaEventDestroy (start);
+    cudaEventDestroy (stop);
+
+    results.emplace_back ("GPU BCSR (column major, column-by-column)", elapsed, 0, 0);
   }
 
   std::fill_n (cpu_y.get (), y_size, 0.0);

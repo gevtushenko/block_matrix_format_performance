@@ -90,7 +90,7 @@ public:
   void print_time (const measurement_class &measurement) const
   {
     const double time = measurement.get_elapsed ();
-    fmt::print (fmt::fg (fmt::color::yellow), "{0:<70}", measurement.get_format ());
+    fmt::print (fmt::fg (fmt::color::yellow), "\t{0:<70}", measurement.get_format ());
     fmt::print (":  ");
     add_time (time, fmt::color::white);
     add_time (speedup (time), fmt::color::green);
@@ -114,18 +114,25 @@ template <typename data_type, typename index_type>
 void perform_measurements (
   index_type bs,
   index_type n_rows,
-  index_type blocks_per_row
+  index_type blocks_per_row,
+  bool debug_info = false
   )
 {
   const size_t nnz = n_rows * blocks_per_row * bs * bs;
-  const double matrix_and_vectors_data_size = static_cast<double> (nnz + 2 * n_rows * bs) * sizeof (data_type);
 
+  const double matrix_and_vectors_data_size = static_cast<double> (nnz + 2 * n_rows * bs) * sizeof (data_type);
   const size_t csr_extra_data_size = (nnz + n_rows * bs + bs) * sizeof (index_type);
   const size_t bcsr_extra_data_size = (n_rows * blocks_per_row + n_rows + 1) * sizeof (index_type);
 
-  std::cout << "Required memory: \n"
-            << "\tCSR  => DATA: " << size_to_gb (matrix_and_vectors_data_size) << " GB; EXTRA: " << size_to_gb (csr_extra_data_size) << "\n"
-            << "\tBCSR => DATA: " << size_to_gb (matrix_and_vectors_data_size) << " GB; EXTRA: " << size_to_gb (bcsr_extra_data_size) << std::endl;
+  if (debug_info)
+    {
+      std::cout << "Required memory: \n"
+                << "\tCSR  => DATA: " << size_to_gb (matrix_and_vectors_data_size) << " GB; EXTRA: " << size_to_gb (csr_extra_data_size) << "\n"
+                << "\tBCSR => DATA: " << size_to_gb (matrix_and_vectors_data_size) << " GB; EXTRA: " << size_to_gb (bcsr_extra_data_size) << std::endl;
+    }
+
+  fmt::print (fmt::fg (fmt::color::tomato), "\nBS: {}\n", bs);
+
   auto block_matrix = gen_n_diag_bcsr<data_type, index_type> (n_rows, blocks_per_row, bs);
   auto matrix = std::make_unique<csr_matrix_class<data_type, index_type>> (*block_matrix);
 
@@ -163,7 +170,10 @@ void perform_measurements (
 int main ()
 {
   cudaSetDevice (1);
-  perform_measurements<float, int> (16, 50'000, 6);
+
+  // for (auto &bs: {2, 4, 8, 16, 32})
+  for (auto &bs: {2})
+    perform_measurements<float, int> (bs, 50'000, 6);
 
   return 0;
 }
