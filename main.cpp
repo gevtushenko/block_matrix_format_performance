@@ -171,9 +171,8 @@ int main ()
 {
   cudaSetDevice (1);
 
-  // for (auto &bs: {2, 4, 8, 16, 32})
-  for (auto &bs: {2})
-    perform_measurements<float, int> (bs, 50'000, 6);
+  for (auto &bs: {2, 4, 8, 16, 32})
+    perform_measurements<float, int> (bs, 70'000, 6);
 
   return 0;
 }

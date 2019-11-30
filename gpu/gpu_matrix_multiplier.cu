@@ -274,6 +274,7 @@ measurement_class gpu_csr_vector_spmv (
 
 template <typename data_type, typename index_type>
 __global__ void bcsr_spmv_kernel_block_per_block_row_thread_per_row_row_major_matrix (
+  index_type n_block_rows,
   index_type bs,
   const index_type * __restrict__ col_ids,
   const index_type * __restrict__ row_ptr,
@@ -281,18 +282,22 @@ __global__ void bcsr_spmv_kernel_block_per_block_row_thread_per_row_row_major_ma
   const data_type * __restrict__ x,
   data_type *y)
 {
-  const index_type row = threadIdx.x;
-  const index_type block_row = blockIdx.x;
+  const index_type idx = blockIdx.x * blockDim.x + threadIdx.x;
+  const index_type row = idx % bs;
+  const index_type block_row = idx / bs;
   const index_type first_block = row_ptr[block_row];
   const index_type last_block = row_ptr[block_row + 1];
 
-  if (row < bs)
+  if (row < bs && block_row < n_block_rows)
     {
       data_type local_out = 0.0;
 
       for (index_type block = first_block; block < last_block; block++)
-        for (index_type col = 0; col < bs; col++)
-          local_out += x[col_ids[block] * bs + col] * data[block * bs * bs + row * bs + col];
+        {
+          const index_type first_col = col_ids[block] * bs;
+          for (index_type col = 0; col < bs; col++)
+            local_out += x[first_col + col] * data[block * bs * bs + row * bs + col];
+        }
 
       y[block_row * bs + row] = local_out;
     }
@@ -300,6 +305,7 @@ __global__ void bcsr_spmv_kernel_block_per_block_row_thread_per_row_row_major_ma
 
 template <typename data_type, typename index_type>
 __global__ void bcsr_spmv_kernel_block_per_block_row_thread_per_row_column_major_matrix (
+  index_type n_block_rows,
   index_type bs,
   const index_type * __restrict__ col_ids,
   const index_type * __restrict__ row_ptr,
@@ -307,18 +313,22 @@ __global__ void bcsr_spmv_kernel_block_per_block_row_thread_per_row_column_major
   const data_type * __restrict__ x,
   data_type * __restrict__ y)
 {
-  const index_type row = threadIdx.x;
-  const index_type block_row = blockIdx.x;
+  const index_type idx = blockIdx.x * blockDim.x + threadIdx.x;
+  const index_type row = idx % bs;
+  const index_type block_row = idx / bs;
   const index_type first_block = row_ptr[block_row];
   const index_type last_block = row_ptr[block_row + 1];
 
-  if (row < bs)
+  if (row < bs && block_row < n_block_rows)
     {
       data_type local_out = 0.0;
 
       for (index_type block = first_block; block < last_block; block++)
-        for (index_type col = 0; col < bs; col++)
-          local_out += x[col_ids[block] * bs + col] * data[block * bs * bs + col * bs + row];
+        {
+          const index_type first_col = col_ids[block] * bs;
+          for (index_type col = 0; col < bs; col++)
+            local_out += x[first_col + col] * data[block * bs * bs + col * bs + row];
+        }
 
       y[block_row * bs + row] = local_out;
     }
@@ -333,8 +343,9 @@ __global__ void bcsr_spmv_kernel_block_per_block_row_thread_per_row_column_major
   const data_type * __restrict__ x,
   data_type *y)
 {
-  const index_type row = threadIdx.x;
-  const index_type block_row = blockIdx.x;
+  const index_type idx = blockIdx.x * blockDim.x + threadIdx.x;
+  const index_type row = idx % bs;
+  const index_type block_row = idx / bs;
   const index_type first_block = row_ptr[block_row];
   const index_type last_block = row_ptr[block_row + 1];
 
@@ -345,16 +356,17 @@ __global__ void bcsr_spmv_kernel_block_per_block_row_thread_per_row_column_major
 
   for (index_type block = first_block; block < last_block; block++)
     {
-      __syncthreads ();
+      __syncwarp ();
       if (threadIdx.x < bs)
         cache_x[threadIdx.x] = x[col_ids[block] * bs + threadIdx.x];
-      __syncthreads ();
+      __syncwarp ();
 
       for (index_type col = 0; col < bs; col++)
         local_out += cache_x[col] * data[block * bs * bs + col * bs + row];
     }
 
-  y[block_row * bs + row] = local_out;
+  if (row < bs)
+    y[block_row * bs + row] = local_out;
 }
 
 template <typename index_type>
@@ -409,12 +421,7 @@ __global__ void bcsr_spmv_kernel_column_by_column (
     {
       __syncthreads ();
       if ((lane < stride * bs) && ((threadIdx.x + stride * bs) < 32))
-        {
-          if (threadIdx.x + stride * bs >= 32)
-            printf ("t_x: %d; lane: %d; stride: %d\n", threadIdx.x, lane, stride);
-
-          partial_sums[threadIdx.x] += partial_sums[threadIdx.x + stride * bs];
-        }
+        partial_sums[threadIdx.x] += partial_sums[threadIdx.x + stride * bs];
     }
 
   if (lane < bs)
@@ -529,13 +536,13 @@ std::vector<measurement_class> gpu_bcsr_spmv (
     cudaEventRecord (start);
 
     {
-      dim3 block_size = dim3 (matrix.bs);
+      dim3 block_size = 512;
       dim3 grid_size {};
 
       grid_size.x = (matrix.n_rows * matrix.bs + block_size.x - 1) / block_size.x;
 
       bcsr_spmv_kernel_block_per_block_row_thread_per_row_row_major_matrix<data_type, index_type> <<<grid_size, block_size>>> (
-        matrix.bs, d_columns, d_row_ptr, d_values, d_x, d_y);
+        matrix.n_rows, matrix.bs, d_columns, d_row_ptr, d_values, d_x, d_y);
     }
 
     cudaEventRecord (stop);
@@ -652,13 +659,13 @@ std::vector<measurement_class> gpu_bcsr_spmv (
     cudaEventRecord (start);
 
     {
-      dim3 block_size = dim3 (matrix.bs);
+      dim3 block_size = 512;
       dim3 grid_size {};
 
       grid_size.x = (matrix.n_rows * matrix.bs + block_size.x - 1) / block_size.x;
 
       bcsr_spmv_kernel_block_per_block_row_thread_per_row_column_major_matrix<data_type, index_type> <<<grid_size, block_size>>> (
-        matrix.bs, d_columns, d_row_ptr, d_values, d_x, d_y);
+        matrix.n_rows, matrix.bs, d_columns, d_row_ptr, d_values, d_x, d_y);
     }
 
     cudaEventRecord (stop);
@@ -695,7 +702,7 @@ std::vector<measurement_class> gpu_bcsr_spmv (
     cudaEventRecord (start);
 
     {
-      dim3 block_size = dim3 (matrix.bs);
+      dim3 block_size = dim3 (32);
       dim3 grid_size {};
 
       grid_size.x = (matrix.n_rows * matrix.bs  + block_size.x - 1) / block_size.x;
@@ -741,7 +748,7 @@ std::vector<measurement_class> gpu_bcsr_spmv (
       dim3 block_size = 32;
       dim3 grid_size {};
 
-      grid_size.x = (matrix.n_rows * 32  + block_size.x - 1) / block_size.x;
+      grid_size.x = (matrix.n_rows * 32 + block_size.x - 1) / block_size.x;
 
       bcsr_spmv_kernel_column_by_column<data_type, index_type> <<<grid_size, block_size, block_size.x * sizeof (data_type)>>> (
         matrix.bs, d_columns, d_row_ptr, d_values, d_x, d_y);
