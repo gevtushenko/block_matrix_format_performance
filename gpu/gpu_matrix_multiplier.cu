@@ -381,8 +381,8 @@ __global__ void bcsr_spmv_kernel_column_by_column (
   data_type * __restrict__ y)
 {
   const index_type idx = blockIdx.x * blockDim.x + threadIdx.x;
-  const index_type lane = idx / 32;
-  const index_type block_row = idx % 32; ///< Warp per block row
+  const index_type lane = idx % 32;
+  const index_type block_row = idx / 32; ///< Warp per block row
   const index_type first_block = row_ptr[block_row];
   const index_type last_block = row_ptr[block_row + 1];
 
@@ -399,7 +399,7 @@ __global__ void bcsr_spmv_kernel_column_by_column (
       const index_type c = col % bs;
 
       const data_type value = data[block * bs * bs + c * bs + r];
-      const data_type x_value = x[col_ids[block] + c];
+      const data_type x_value = x[col_ids[block] * bs + c];
       local_out += x_value * value;
     }
 
@@ -408,11 +408,16 @@ __global__ void bcsr_spmv_kernel_column_by_column (
   for (index_type stride = round_up_to_power_of_two((32 / bs) / 2); stride > 0; stride /= 2)
     {
       __syncthreads ();
-      if ((lane < stride * bs) && (lane + stride * bs < 32))
-        partial_sums[threadIdx.x] += partial_sums[threadIdx.x + stride * bs];
+      if ((lane < stride * bs) && ((threadIdx.x + stride * bs) < 32))
+        {
+          if (threadIdx.x + stride * bs >= 32)
+            printf ("t_x: %d; lane: %d; stride: %d\n", threadIdx.x, lane, stride);
+
+          partial_sums[threadIdx.x] += partial_sums[threadIdx.x + stride * bs];
+        }
     }
 
-    if (lane < bs)
+  if (lane < bs)
     y[block_row * bs + lane] = partial_sums[threadIdx.x];
 }
 
@@ -733,10 +738,10 @@ std::vector<measurement_class> gpu_bcsr_spmv (
     cudaEventRecord (start);
 
     {
-      dim3 block_size = dim3 (matrix.bs);
+      dim3 block_size = 32;
       dim3 grid_size {};
 
-      grid_size.x = (matrix.n_rows * matrix.bs  + block_size.x - 1) / block_size.x;
+      grid_size.x = (matrix.n_rows * 32  + block_size.x - 1) / block_size.x;
 
       bcsr_spmv_kernel_column_by_column<data_type, index_type> <<<grid_size, block_size, block_size.x * sizeof (data_type)>>> (
         matrix.bs, d_columns, d_row_ptr, d_values, d_x, d_y);
