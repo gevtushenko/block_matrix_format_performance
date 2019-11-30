@@ -1,3 +1,6 @@
 [submodule "external/fmt"]
 	path = external/fmt
 	url = https://github.com/fmtlib/fmt.git
+[submodule "external/int_fastdiv"]
+	path = external/int_fastdiv
+	url = https://github.com/milakov/int_fastdiv.git
