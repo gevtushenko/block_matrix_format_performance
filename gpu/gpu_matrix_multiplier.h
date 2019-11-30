@@ -16,6 +16,11 @@ measurement_class gpu_csr_spmv (
   const data_type *reference_y);
 
 template <typename data_type, typename index_type>
+measurement_class gpu_csr_vector_spmv (
+  const csr_matrix_class<data_type, index_type> &matrix,
+  const data_type *reference_y);
+
+template <typename data_type, typename index_type>
 std::vector<measurement_class> gpu_bcsr_spmv (
   bcsr_matrix_class<data_type, index_type> &matrix,
   const data_type *reference_y);

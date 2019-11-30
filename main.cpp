@@ -151,6 +151,9 @@ void perform_measurements (
   auto gpu_elapsed_csr = gpu_csr_spmv<data_type, index_type> (*matrix, reference_answer.get ());
   single_core_timer.print_time (gpu_elapsed_csr);
 
+  auto gpu_elapsed_csr_vector = gpu_csr_vector_spmv<data_type, index_type> (*matrix, reference_answer.get ());
+  single_core_timer.print_time (gpu_elapsed_csr_vector);
+
   auto bcsr_elapsed = gpu_bcsr_spmv<data_type, index_type> (*block_matrix, reference_answer.get ());
 
   for (auto &elapsed: bcsr_elapsed)
@@ -160,7 +163,7 @@ void perform_measurements (
 int main ()
 {
   cudaSetDevice (1);
-  perform_measurements<float, int> (32, 50'000, 6);
+  perform_measurements<float, int> (16, 50'000, 6);
 
   return 0;
 }

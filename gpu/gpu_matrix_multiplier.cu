@@ -35,6 +35,24 @@ struct shared_memory<double>
   }
 };
 
+#define FULL_WARP_MASK 0xFFFFFFFF
+
+template <class T>
+__device__ T warp_reduce (T val)
+{
+  /**
+   *  For a thread at lane X in the warp, __shfl_down_sync(FULL_MASK, val, offset) gets
+   *  the value of the val variable from the thread at lane X+offset of the same warp.
+   *  The data exchange is performed between registers, and more efficient than going
+   *  through shared memory, which requires a load, a store and an extra register to
+   *  hold the address.
+   */
+  for (int offset = warpSize / 2; offset > 0; offset /= 2)
+    val += __shfl_down_sync (FULL_WARP_MASK, val, offset);
+
+  return val;
+}
+
 template <typename data_type>
 __global__ void fill_vector (unsigned int n, data_type *vec, data_type value)
 {
@@ -145,12 +163,122 @@ measurement_class gpu_csr_spmv (
 }
 
 template <typename data_type, typename index_type>
+__global__ void csr_spmv_vector_kernel (
+  index_type n_rows,
+  const index_type * __restrict__ col_ids,
+  const index_type * __restrict__ row_ptr,
+  const data_type * __restrict__ data,
+  const data_type * __restrict__ x,
+  data_type * __restrict__ y)
+{
+  const index_type thread_id = blockIdx.x * blockDim.x + threadIdx.x;
+  const index_type warp_id = thread_id / 32;
+  const index_type lane = thread_id % 32;
+
+  const index_type row = warp_id; ///< One warp per row
+
+  data_type dot = 0;
+  if (row < n_rows)
+    {
+      const index_type row_start = row_ptr[row];
+      const index_type row_end = row_ptr[row + 1];
+
+      for (index_type element = row_start + lane; element < row_end; element += 32)
+        dot += data[element] * x[col_ids[element]];
+    }
+
+  dot = warp_reduce (dot);
+
+  if (lane == 0 && row < n_rows)
+    {
+      y[row] = dot;
+    }
+}
+
+template <typename data_type, typename index_type>
+measurement_class gpu_csr_vector_spmv (
+  const csr_matrix_class<data_type, index_type> &matrix,
+  const data_type *reference_y)
+{
+  const index_type matrix_size = matrix.nnz;
+  const index_type columns_size = matrix_size;
+  const index_type row_ptr_size = matrix.n_rows + 1;
+  const index_type x_size = matrix.n_cols;
+  const index_type y_size = matrix.n_rows;
+
+  data_type *d_values {};
+  data_type *d_y {};
+  data_type *d_x {};
+
+  index_type *d_row_ptr {};
+  index_type *d_columns {};
+
+  cudaMalloc (&d_values, matrix_size * sizeof (data_type));
+  cudaMalloc (&d_x, x_size * sizeof (data_type));
+  cudaMalloc (&d_y, y_size * sizeof (data_type));
+
+  cudaMalloc (&d_row_ptr, row_ptr_size * sizeof (index_type));
+  cudaMalloc (&d_columns, columns_size * sizeof (index_type));
+
+  cudaMemcpy (d_values, matrix.values.get (), matrix_size * sizeof (data_type), cudaMemcpyHostToDevice);
+  cudaMemcpy (d_columns, matrix.columns.get (), columns_size * sizeof (index_type), cudaMemcpyHostToDevice);
+  cudaMemcpy (d_row_ptr, matrix.row_ptr.get (), row_ptr_size * sizeof (index_type), cudaMemcpyHostToDevice);
+
+  {
+    dim3 block_size = dim3 (512);
+    dim3 grid_size {};
+
+    grid_size.x = (x_size + block_size.x - 1) / block_size.x;
+    fill_vector<data_type><<<grid_size, block_size>>> (x_size, d_x, 1.0);
+  }
+
+  cudaEvent_t start, stop;
+  cudaEventCreate (&start);
+  cudaEventCreate (&stop);
+
+  cudaDeviceSynchronize ();
+  cudaEventRecord (start);
+
+  {
+    dim3 block_size = dim3 (512);
+    dim3 grid_size {};
+
+    grid_size.x = (matrix.n_rows * 32 + block_size.x - 1) / block_size.x;
+
+    csr_spmv_vector_kernel<data_type, index_type> <<<grid_size, block_size>>> (matrix.n_rows, d_columns, d_row_ptr, d_values, d_x, d_y);
+  }
+
+  cudaEventRecord (stop);
+  cudaEventSynchronize (stop);
+
+  float milliseconds = 0;
+  cudaEventElapsedTime (&milliseconds, start, stop);
+  const double elapsed = milliseconds / 1000;
+
+  cudaEventDestroy (start);
+  cudaEventDestroy (stop);
+
+  std::unique_ptr<data_type[]> cpu_y (new data_type[y_size]);
+  cudaMemcpy (cpu_y.get (), d_y, y_size * sizeof (data_type), cudaMemcpyDeviceToHost);
+
+  compare_results (y_size, reference_y, cpu_y.get ());
+
+  cudaFree (d_values);
+  cudaFree (d_x);
+  cudaFree (d_y);
+  cudaFree (d_row_ptr);
+  cudaFree (d_columns);
+
+  return measurement_class ("GPU CSR-Vector", elapsed, 0, 0);
+}
+
+template <typename data_type, typename index_type>
 __global__ void bcsr_spmv_kernel_block_per_block_row_thread_per_row_row_major_matrix (
   index_type bs,
-  const index_type *col_ids,
-  const index_type *row_ptr,
-  const data_type *data,
-  const data_type *x,
+  const index_type * __restrict__ col_ids,
+  const index_type * __restrict__ row_ptr,
+  const data_type * __restrict__ data,
+  const data_type * __restrict__ x,
   data_type *y)
 {
   const index_type row = threadIdx.x;
@@ -173,11 +301,11 @@ __global__ void bcsr_spmv_kernel_block_per_block_row_thread_per_row_row_major_ma
 template <typename data_type, typename index_type>
 __global__ void bcsr_spmv_kernel_block_per_block_row_thread_per_row_column_major_matrix (
   index_type bs,
-  const index_type *col_ids,
-  const index_type *row_ptr,
-  const data_type *data,
-  const data_type *x,
-  data_type *y)
+  const index_type * __restrict__ col_ids,
+  const index_type * __restrict__ row_ptr,
+  const data_type * __restrict__ data,
+  const data_type * __restrict__ x,
+  data_type * __restrict__ y)
 {
   const index_type row = threadIdx.x;
   const index_type block_row = blockIdx.x;
@@ -199,10 +327,10 @@ __global__ void bcsr_spmv_kernel_block_per_block_row_thread_per_row_column_major
 template <typename data_type, typename index_type>
 __global__ void bcsr_spmv_kernel_block_per_block_row_thread_per_row_column_major_matrix_coal_x (
   index_type bs,
-  const index_type *col_ids,
-  const index_type *row_ptr,
-  const data_type *data,
-  const data_type *x,
+  const index_type * __restrict__ col_ids,
+  const index_type * __restrict__ row_ptr,
+  const data_type * __restrict__ data,
+  const data_type * __restrict__ x,
   data_type *y)
 {
   const index_type row = threadIdx.x;
@@ -540,6 +668,7 @@ std::vector<measurement_class> gpu_bcsr_spmv (
 
 #define INSTANTIATE(DTYPE,ITYPE) \
   template measurement_class gpu_csr_spmv (const csr_matrix_class<DTYPE, ITYPE> &matrix, const DTYPE *reference_y); \
+  template measurement_class gpu_csr_vector_spmv (const csr_matrix_class<DTYPE, ITYPE> &matrix, const DTYPE *reference_y); \
   template std::vector<measurement_class> gpu_bcsr_spmv (bcsr_matrix_class<DTYPE, ITYPE> &matrix, const DTYPE *reference_y);
 
 INSTANTIATE (float,int)
