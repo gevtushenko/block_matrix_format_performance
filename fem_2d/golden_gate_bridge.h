@@ -9,6 +9,40 @@
 
 #include <fstream>
 #include <memory>
+#include <cmath>
+#include <array>
+
+/// C = A * B
+template <class data_type, class index_type>
+void matrix_mult_matrix (const data_type *a, const data_type *b, data_type *c, const index_type n)
+{
+  for (index_type i = 0; i < n; i++)
+    {
+      for (index_type j = 0; j < n; j++)
+        {
+          data_type sum = 0.0;
+          for (index_type k = 0; k < n; k++)
+            sum += a[i * n + k] * b[k * n + j];
+          c[i * n + j] = sum;
+        }
+    }
+}
+
+/// C = A^T * B
+template <class data_type, class index_type>
+void matrix_transponse_and_mult (const data_type *a, const data_type *b, data_type *c, const index_type n)
+{
+  for (index_type i = 0; i < n; i++)
+    {
+      for (index_type j = 0; j < n; j++)
+        {
+          data_type sum = 0.0;
+          for (index_type k = 0; k < n; k++)
+            sum += a[k * n + i] * b[k * n + j];
+          c[i * n + j] = sum;
+        }
+    }
+}
 
 template <typename data_type, typename index_type>
 class golden_gate_bridge_2d
@@ -26,7 +60,7 @@ class golden_gate_bridge_2d
    *       3    4    5
    */
 
-  const index_type block_size = 4; ///< Local stiffness matrix size
+  constexpr static const index_type block_size = 4; ///< Local stiffness matrix size
   const data_type segment_length = 10; ///< Size of segment in meters
   const data_type side_length = 345.0; ///< Size from bridge tower to bank in meters
   const data_type main_part_length = 1280.0; ///< Size from tower to tower in meters
@@ -46,10 +80,10 @@ class golden_gate_bridge_2d
   index_type right_tower_bottom {};
   index_type right_tower_top {};
 
-  const data_type rope_e = 190 * 10E+9; // steel?
-  const data_type tower_e = 190 * 10E+9; // steel?
-  const data_type segment_e = 190 * 10E+9; // steel?
-  const data_type spin_e = 190 * 10E+9; // steel?
+  const data_type rope_e = 190; // steel?
+  const data_type tower_e = 190; // steel?
+  const data_type segment_e = 190; // steel?
+  const data_type spin_e = 190; // steel?
 
   const data_type spin_a = 0.924; /// meters
   const data_type rope_a = 0.3; /// meters
@@ -66,6 +100,9 @@ public:
     , nodes_ys (new data_type[nodes_count])
     , elements_areas (new data_type[elements_count])
     , elements_e (new data_type[elements_count])
+    , dxs (new data_type[elements_count])
+    , dys (new data_type[elements_count])
+    , lens (new data_type[elements_count])
     , elements_starts (new index_type[elements_count])
     , elements_ends (new index_type[elements_count])
   {
@@ -81,6 +118,9 @@ public:
 
     elements_count = first_available_element_id;
     nodes_count = first_available_node_id;
+
+    finalize_elements ();
+    calculate_local_stiffness_matrices ();
 
     matrix = std::make_unique<bcsr_matrix_class<data_type, index_type>> (nodes_count, nodes_count, block_size, elements_count);
   }
@@ -351,6 +391,81 @@ private:
     set_element (last_spin_segment, right_tower_top, first_available_node_id  - 1, spin_a, spin_e);
   }
 
+  void finalize_elements ()
+  {
+    for (index_type element = 0; element < elements_count; element++)
+      {
+        dxs[element] = nodes_xs[elements_ends[element]] - nodes_xs[elements_starts[element]];
+        dys[element] = nodes_ys[elements_ends[element]] - nodes_ys[elements_starts[element]];
+        lens[element] = std::sqrt (dxs[element] * dxs[element] + dys[element] * dys[element]);
+      }
+  }
+
+  void calculate_local_stiffness_matrices ()
+  {
+    std::array<data_type, block_size * block_size> k_prime;
+    std::array<data_type, block_size * block_size> beta_prime;
+    std::array<data_type, block_size * block_size> tmp_block;
+    std::array<data_type, block_size * block_size> stiffness_matrix;
+
+    for (index_type element = 0; element < elements_count; element++)
+      {
+        k_prime.fill (0.0);
+        beta_prime.fill (0.0);
+
+        const data_type cos_theta = dxs[element] / lens[element];
+        const data_type sin_theta = dys[element] / lens[element];
+        const data_type ae_over_l = elements_areas[element] * elements_e[element] / lens[element];
+
+        /// 0) We need to fill follow elements of local stiffness matrix
+        ///
+        ///   +-----------------------------+
+        ///   | i\j |    0 |  1 |    2 |  3 |
+        ///   +-----+---- -+----+------+----+
+        ///   | 0   | AE/L |  0 |-AE/L |  0 |
+        ///   +-----+------+----+------+----+
+        ///   | 1   |    0 |  0 |    0 |  0 |
+        ///   +-----+------+----+------+----+
+        ///   | 2   |-AE/L |  0 | AE/L |  0 |
+        ///   +-----+------+----+------+----+
+        ///   | 3   |    0 |  0 |    0 |  0 |
+        ///   +-----------------------------+
+
+        k_prime[0 * block_size + 0] =  ae_over_l;
+        k_prime[0 * block_size + 2] = -ae_over_l;
+        k_prime[2 * block_size + 0] = -ae_over_l;
+        k_prime[2 * block_size + 2] =  ae_over_l;
+
+        /// 1) We need to fill elements of rotation matrix beta prime
+        ///
+        ///   +-----------------------------+
+        ///   | i\j |   0 |  1  |   2 |   3 |
+        ///   +-----+-----+-----+-----+-----+
+        ///   | 0   | cos | sin |   0 |   0 |
+        ///   +-----+-----+-----+-----+-----+
+        ///   | 1   |-sin | cos |   0 |   0 |
+        ///   +-----+-----+-----+-----+-----+
+        ///   | 2   |   0 |   0 | cos | sin |
+        ///   +-----+-----+-----+-----+-----+
+        ///   | 3   |   0 |   0 |-sin | cos |
+        ///   +-----------------------------+
+
+        beta_prime[0 * block_size + 0] =  cos_theta;
+        beta_prime[0 * block_size + 1] =  sin_theta;
+        beta_prime[1 * block_size + 0] = -sin_theta;
+        beta_prime[1 * block_size + 1] =  cos_theta;
+
+        beta_prime[2 * block_size + 2] =  cos_theta;
+        beta_prime[2 * block_size + 3] =  sin_theta;
+        beta_prime[3 * block_size + 2] = -sin_theta;
+        beta_prime[3 * block_size + 3] =  cos_theta;
+
+        /// 2) We need to calculate global stiffness matrix for this element: [k_e] = [Beta_e]^T [k^{'}_{e}] [Beta_e]
+        matrix_mult_matrix (k_prime.data(), beta_prime.data(), tmp_block.data(), block_size);
+        matrix_transponse_and_mult (beta_prime.data(), tmp_block.data(), stiffness_matrix.data(), block_size);
+      }
+  }
+
 private:
   index_type nodes_count {};
   std::unique_ptr<data_type[]> nodes_xs;
@@ -358,6 +473,10 @@ private:
 
   std::unique_ptr<data_type[]> elements_areas;
   std::unique_ptr<data_type[]> elements_e;
+
+  std::unique_ptr<data_type[]> dxs;  ///< Higher node id minus lower node id!
+  std::unique_ptr<data_type[]> dys;  ///< Higher node id minus lower node id!
+  std::unique_ptr<data_type[]> lens; ///< Higher node id minus lower node id!
 
   std::unique_ptr<index_type[]> elements_starts;
   std::unique_ptr<index_type[]> elements_ends;
