@@ -209,22 +209,21 @@ private:
 
   void fill_side_spin_and_ropes ()
   {
-    const data_type y_1 = bridge_height;
-    const data_type y_2 = tower_height;
-    const data_type x_1 = 0;
-    const data_type x_2 = side_length;
-
-    const data_type a = (y_1 - y_2);
-    const data_type b = (x_2 - x_1);
-    const data_type c = y_1 * x_2 - x_1 * y_2;
-
-    auto get_y = [&] (data_type x)
+    auto get_line_eq = [&] (const data_type y_1, const data_type y_2, const data_type x_1, const data_type x_2)
     {
-      // Ax + By = C
-      return (c - a * x) / b;
+      const data_type a = (y_1 - y_2);
+      const data_type b = (x_2 - x_1);
+      const data_type c = y_1 * x_2 - x_1 * y_2;
+
+      return [=] (data_type x)
+      {
+        // Ax + By = C
+        return (c - a * x) / b;
+      };
     };
 
-
+    /// Left
+    auto get_y_left = get_line_eq (bridge_height, tower_height, 0, side_length);
     const index_type first_left_side_spin_segment = first_available_element_id++;
     elements_starts[first_left_side_spin_segment] = 0;
     elements_ends[first_left_side_spin_segment] = first_available_node_id;
@@ -236,7 +235,7 @@ private:
         const index_type rope = first_available_element_id++;
 
         nodes_xs[rope_top] = segment_length * segment_id + segment_length / 2;
-        nodes_ys[rope_top] = get_y (nodes_xs[rope_top]);
+        nodes_ys[rope_top] = get_y_left (nodes_xs[rope_top]);
 
         elements_starts[rope] = rope_bottom;
         elements_ends[rope] = rope_top;
@@ -252,6 +251,28 @@ private:
     const index_type last_left_side_spin_segment = first_available_element_id++;
     elements_starts[last_left_side_spin_segment] = first_available_node_id - 1;
     elements_ends[last_left_side_spin_segment] = left_tower_top;
+
+    /// Left
+    auto get_y_right = get_line_eq (tower_height, bridge_height, side_length + main_part_length, main_part_length + 2 * side_length);
+
+    for (index_type segment_id = (side_length + main_part_length + segment_length) / segment_length;
+         segment_id < (main_part_length + 2 * side_length - segment_length) / segment_length;
+         segment_id++)
+      {
+        const index_type rope_bottom = segment_id * 4 + 1;
+        const index_type rope_top = first_available_node_id++;
+        const index_type rope = first_available_element_id++;
+
+        nodes_xs[rope_top] = segment_length * segment_id + segment_length / 2;
+        nodes_ys[rope_top] = get_y_right (nodes_xs[rope_top]);
+
+        elements_starts[rope] = rope_bottom;
+        elements_ends[rope] = rope_top;
+      }
+
+    // const index_type last_left_side_spin_segment = first_available_element_id++;
+    // elements_starts[last_left_side_spin_segment] = first_available_node_id - 1;
+    // elements_ends[last_left_side_spin_segment] = left_tower_top;
   }
 
 private:
