@@ -35,7 +35,7 @@ class golden_gate_bridge_2d
   const data_type section_height = 7.62; ///< In meters
   const index_type segments_count {};
 
-  const index_type elements_count {};
+  index_type elements_count {};
 
   index_type first_available_node_id {};
   index_type first_available_element_id {};
@@ -47,7 +47,7 @@ class golden_gate_bridge_2d
   index_type right_tower_top {};
 
 public:
-  explicit golden_gate_bridge_2d (data_type segment_length_arg = 7.64)
+  explicit golden_gate_bridge_2d (data_type segment_length_arg = 7.62)
     : segment_length (segment_length_arg)
     , segments_count (calculate_segments_count())
     , elements_count (calculate_elements_count())
@@ -57,7 +57,6 @@ public:
     , elements_starts (new index_type[elements_count])
     , elements_ends (new index_type[elements_count])
   {
-
     std::fill_n (elements_starts.get (), elements_count, 0);
     std::fill_n (elements_ends.get (), elements_count, 0);
     std::fill_n (nodes_xs.get (), nodes_count, 0.0);
@@ -69,6 +68,9 @@ public:
     fill_tower_part ();
     fill_side_spin_and_ropes ();
     fill_main_spin_and_ropes ();
+
+    elements_count = first_available_element_id;
+    nodes_count = first_available_node_id;
   }
 
   void write_vtk (const std::string &filename)
@@ -304,6 +306,9 @@ private:
       return a * x * x + c;
     };
 
+    const index_type first_spin_segment = first_available_element_id++;
+    elements_starts[first_spin_segment] = left_tower_top;
+    elements_ends[first_spin_segment] = first_available_node_id;
 
     bool first_right_spine_segment = true;
     for (index_type segment_id = (side_length + segment_length) / segment_length;
@@ -319,7 +324,22 @@ private:
 
         elements_starts[rope] = rope_bottom;
         elements_ends[rope] = rope_top;
+
+        if (first_right_spine_segment)
+          {
+            first_right_spine_segment = false;
+          }
+        else
+          {
+            const index_type spin = first_available_element_id++;
+            elements_starts[spin] = rope_top - 1;
+            elements_ends[spin] = rope_top;
+          }
       }
+
+    const index_type last_spin_segment = first_available_element_id++;
+    elements_starts[last_spin_segment] = right_tower_top;
+    elements_ends[last_spin_segment] = first_available_node_id - 1;
   }
 
 private:
