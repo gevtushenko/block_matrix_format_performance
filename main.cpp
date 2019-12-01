@@ -3,6 +3,8 @@
 
 #include "gpu_matrix_multiplier.h"
 
+#include "fem_2d/golden_gate_bridge.h"
+
 #include <cuda_runtime.h>
 
 #include <functional>
@@ -169,10 +171,16 @@ void perform_measurements (
 
 int main ()
 {
-  cudaSetDevice (1);
+  if (0)
+    {
+      cudaSetDevice (1);
 
-  for (auto &bs: {2, 4, 8, 16, 32})
-    perform_measurements<float, int> (bs, 70'000, 6);
+      for (auto &bs: {2, 4, 8, 16, 32})
+        perform_measurements<float, int> (bs, 70'000, 6);
+    }
+
+  golden_gate_bridge_2d<float, int> bridge_2d;
+  bridge_2d.write_vtk ("output.vtk");
 
   return 0;
 }
