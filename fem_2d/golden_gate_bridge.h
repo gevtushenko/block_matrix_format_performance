@@ -37,6 +37,9 @@ class golden_gate_bridge_2d
 
   const index_type elements_count {};
 
+  index_type first_available_node_id {};
+  index_type first_available_element_id {};
+
 public:
   explicit golden_gate_bridge_2d (data_type segment_length_arg = 7.64)
     : segment_length (segment_length_arg)
@@ -57,6 +60,7 @@ public:
     // matrix (new bcsr_matrix_class<data_type, index_type> (elements_count, elements_count, block_size, ))
 
     fill_road_part ();
+    fill_tower_part ();
   }
 
   void write_vtk (const std::string &filename)
@@ -95,17 +99,19 @@ private:
   index_type calculate_elements_count ()
   {
     const index_type elements_count_in_road_part = segments_count * 8 + 4;
+    const index_type towers_part = 2;
     const index_type main_spin_elements_count = segments_count;
     const index_type ropes_elements_count = segments_count;
 
-    return elements_count_in_road_part; // + main_spin_elements_count + ropes_elements_count;
+    return elements_count_in_road_part + towers_part; // + main_spin_elements_count + ropes_elements_count;
   }
 
   index_type calculate_nodes_count ()
   {
     const index_type nodes_count_in_road_part = segments_count * 4 + 2;
+    const index_type towers_part = 4;
 
-    return nodes_count_in_road_part; // + main_spin_elements_count + ropes_elements_count;
+    return nodes_count_in_road_part + towers_part; // + main_spin_elements_count + ropes_elements_count;
   }
 
   void fill_road_part ()
@@ -166,6 +172,30 @@ private:
 
     const index_type e = segments_count * 8 + 0;
     elements_starts[e] = n_1; elements_ends[e] = n_3;
+
+    first_available_node_id = n_3 + 1;
+    first_available_element_id = e + 1;
+  }
+
+  void fill_tower_part ()
+  {
+    const index_type left_tower_bottom = first_available_node_id++;
+    const index_type left_tower_top = first_available_node_id++;
+
+    const index_type right_tower_bottom = first_available_node_id++;
+    const index_type right_tower_top = first_available_node_id++;
+
+    const index_type left_tower = first_available_element_id++;
+    const index_type right_tower = first_available_element_id++;
+
+    nodes_xs[left_tower_bottom]  = nodes_xs[left_tower_top]  = side_length;
+    nodes_xs[right_tower_bottom] = nodes_xs[right_tower_top] = side_length + main_part_length;
+
+    nodes_ys[right_tower_bottom] = nodes_ys[left_tower_bottom] = 0.0;
+    nodes_ys[right_tower_top] = nodes_ys[left_tower_top] = tower_height;
+
+    elements_starts[left_tower] = left_tower_bottom; elements_ends[left_tower] = left_tower_top;
+    elements_starts[right_tower] = right_tower_bottom; elements_ends[right_tower] = right_tower_top;
   }
 
 private:
