@@ -303,6 +303,41 @@ __global__ void bcsr_spmv_kernel_block_per_block_row_thread_per_row_row_major_ma
     }
 }
 
+template <typename data_type, typename index_type, index_type bs>
+__global__ void bcsr_spmv_kernel_block_per_block_row_warp_per_row_row_major_matrix (
+  index_type n_block_rows,
+  const index_type * __restrict__ col_ids,
+  const index_type * __restrict__ row_ptr,
+  const data_type * __restrict__ data,
+  const data_type * __restrict__ x,
+  data_type *y)
+{
+  const index_type idx = blockIdx.x * blockDim.x + threadIdx.x;
+  const index_type row = (idx / 32) % bs;
+  const index_type lane = idx % 32;
+  const index_type block_row = (idx / 32) / bs;
+  const index_type first_block = row_ptr[block_row];
+  const index_type last_block = row_ptr[block_row + 1];
+
+  data_type local_out = 0.0;
+
+  if (row < bs && block_row < n_block_rows)
+    {
+      for (index_type loc_col = lane; loc_col < bs * (last_block - first_block); loc_col += 32)
+        {
+          const index_type block = first_block + loc_col / bs;
+          const index_type c = loc_col % bs;
+          const index_type col = col_ids[block] * bs + c;
+          local_out += x[col] * data[block * bs * bs + row * bs + c];
+        }
+    }
+
+  local_out = warp_reduce (local_out);
+
+  if (row < bs && block_row < n_block_rows && lane == 0)
+    y[block_row * bs + row] = local_out;
+}
+
 template <typename data_type, typename index_type>
 __global__ void bcsr_spmv_kernel_block_per_block_row_thread_per_row_column_major_matrix (
   index_type n_block_rows,
@@ -717,6 +752,55 @@ std::vector<measurement_class> gpu_bcsr_spmv (
   std::unique_ptr<data_type[]> cpu_y (new data_type[y_size]);
   cudaMemcpy (cpu_y.get (), d_y, y_size * sizeof (data_type), cudaMemcpyDeviceToHost);
 
+  compare_results (y_size, reference_y, cpu_y.get ());
+
+  {
+    dim3 block_size = dim3 (512);
+    dim3 grid_size {};
+
+    grid_size.x = (x_size + block_size.x - 1) / block_size.x;
+    fill_vector<data_type><<<grid_size, block_size>>> (x_size, d_x, 1.0);
+  }
+
+  {
+    cudaEvent_t start, stop;
+    cudaEventCreate (&start);
+    cudaEventCreate (&stop);
+
+    cudaDeviceSynchronize ();
+    cudaEventRecord (start);
+
+    {
+      dim3 block_size = 32 * 4;
+      dim3 grid_size {};
+
+      grid_size.x = (matrix.n_rows * matrix.bs * 32 + block_size.x - 1) / block_size.x;
+
+      switch (matrix.bs)
+        {
+          case  1: bcsr_spmv_kernel_block_per_block_row_warp_per_row_row_major_matrix<data_type, index_type, 1> <<<grid_size, block_size>>> (matrix.n_rows, d_columns, d_row_ptr, d_values, d_x, d_y); break;
+          case  2: bcsr_spmv_kernel_block_per_block_row_warp_per_row_row_major_matrix<data_type, index_type, 2> <<<grid_size, block_size>>> (matrix.n_rows, d_columns, d_row_ptr, d_values, d_x, d_y); break;
+          case  4: bcsr_spmv_kernel_block_per_block_row_warp_per_row_row_major_matrix<data_type, index_type, 4> <<<grid_size, block_size>>> (matrix.n_rows, d_columns, d_row_ptr, d_values, d_x, d_y); break;
+          case  8: bcsr_spmv_kernel_block_per_block_row_warp_per_row_row_major_matrix<data_type, index_type, 8> <<<grid_size, block_size>>> (matrix.n_rows, d_columns, d_row_ptr, d_values, d_x, d_y); break;
+          case 16: bcsr_spmv_kernel_block_per_block_row_warp_per_row_row_major_matrix<data_type, index_type,16> <<<grid_size, block_size>>> (matrix.n_rows, d_columns, d_row_ptr, d_values, d_x, d_y); break;
+          case 32: bcsr_spmv_kernel_block_per_block_row_warp_per_row_row_major_matrix<data_type, index_type,32> <<<grid_size, block_size>>> (matrix.n_rows, d_columns, d_row_ptr, d_values, d_x, d_y); break;
+        }
+    }
+
+    cudaEventRecord (stop);
+    cudaEventSynchronize (stop);
+
+    float milliseconds = 0;
+    cudaEventElapsedTime (&milliseconds, start, stop);
+    const double elapsed = milliseconds / 1000;
+
+    cudaEventDestroy (start);
+    cudaEventDestroy (stop);
+
+    results.emplace_back ("GPU BCSR (row major, warp per row)", elapsed, 0, 0);
+  }
+
+  cudaMemcpy (cpu_y.get (), d_y, y_size * sizeof (data_type), cudaMemcpyDeviceToHost);
   compare_results (y_size, reference_y, cpu_y.get ());
 
   /// cuSPARSE Row major
