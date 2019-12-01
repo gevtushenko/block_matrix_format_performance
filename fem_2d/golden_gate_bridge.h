@@ -40,6 +40,12 @@ class golden_gate_bridge_2d
   index_type first_available_node_id {};
   index_type first_available_element_id {};
 
+  index_type left_tower_bottom {};
+  index_type left_tower_top {};
+
+  index_type right_tower_bottom {};
+  index_type right_tower_top {};
+
 public:
   explicit golden_gate_bridge_2d (data_type segment_length_arg = 7.64)
     : segment_length (segment_length_arg)
@@ -61,6 +67,7 @@ public:
 
     fill_road_part ();
     fill_tower_part ();
+    fill_side_spin_and_ropes ();
   }
 
   void write_vtk (const std::string &filename)
@@ -103,15 +110,17 @@ private:
     const index_type main_spin_elements_count = segments_count;
     const index_type ropes_elements_count = segments_count;
 
-    return elements_count_in_road_part + towers_part; // + main_spin_elements_count + ropes_elements_count;
+    return elements_count_in_road_part + towers_part + ropes_elements_count + main_spin_elements_count;
   }
 
   index_type calculate_nodes_count ()
   {
     const index_type nodes_count_in_road_part = segments_count * 4 + 2;
+    const index_type ropes_top_nodes_count = segments_count;
+    const index_type main_spin_elements_count = segments_count;
     const index_type towers_part = 4;
 
-    return nodes_count_in_road_part + towers_part; // + main_spin_elements_count + ropes_elements_count;
+    return nodes_count_in_road_part + towers_part + ropes_top_nodes_count + main_spin_elements_count;
   }
 
   void fill_road_part ()
@@ -179,11 +188,11 @@ private:
 
   void fill_tower_part ()
   {
-    const index_type left_tower_bottom = first_available_node_id++;
-    const index_type left_tower_top = first_available_node_id++;
+    left_tower_bottom = first_available_node_id++;
+    left_tower_top = first_available_node_id++;
 
-    const index_type right_tower_bottom = first_available_node_id++;
-    const index_type right_tower_top = first_available_node_id++;
+    right_tower_bottom = first_available_node_id++;
+    right_tower_top = first_available_node_id++;
 
     const index_type left_tower = first_available_element_id++;
     const index_type right_tower = first_available_element_id++;
@@ -196,6 +205,53 @@ private:
 
     elements_starts[left_tower] = left_tower_bottom; elements_ends[left_tower] = left_tower_top;
     elements_starts[right_tower] = right_tower_bottom; elements_ends[right_tower] = right_tower_top;
+  }
+
+  void fill_side_spin_and_ropes ()
+  {
+    const data_type y_1 = bridge_height;
+    const data_type y_2 = tower_height;
+    const data_type x_1 = 0;
+    const data_type x_2 = side_length;
+
+    const data_type a = (y_1 - y_2);
+    const data_type b = (x_2 - x_1);
+    const data_type c = y_1 * x_2 - x_1 * y_2;
+
+    auto get_y = [&] (data_type x)
+    {
+      // Ax + By = C
+      return (c - a * x) / b;
+    };
+
+
+    const index_type first_left_side_spin_segment = first_available_element_id++;
+    elements_starts[first_left_side_spin_segment] = 0;
+    elements_ends[first_left_side_spin_segment] = first_available_node_id;
+
+    for (index_type segment_id = 0; segment_id < (side_length - segment_length) / segment_length; segment_id++)
+      {
+        const index_type rope_bottom = segment_id * 4 + 1;
+        const index_type rope_top = first_available_node_id++;
+        const index_type rope = first_available_element_id++;
+
+        nodes_xs[rope_top] = segment_length * segment_id + segment_length / 2;
+        nodes_ys[rope_top] = get_y (nodes_xs[rope_top]);
+
+        elements_starts[rope] = rope_bottom;
+        elements_ends[rope] = rope_top;
+
+        if (segment_id > 0)
+          {
+            const index_type spin = first_available_element_id++;
+            elements_starts[spin] = rope_top - 1;
+            elements_ends[spin] = rope_top;
+          }
+      }
+
+    const index_type last_left_side_spin_segment = first_available_element_id++;
+    elements_starts[last_left_side_spin_segment] = first_available_node_id - 1;
+    elements_ends[last_left_side_spin_segment] = left_tower_top;
   }
 
 private:
