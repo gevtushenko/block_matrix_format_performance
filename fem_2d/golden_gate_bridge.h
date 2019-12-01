@@ -68,6 +68,7 @@ public:
     fill_road_part ();
     fill_tower_part ();
     fill_side_spin_and_ropes ();
+    fill_main_spin_and_ropes ();
   }
 
   void write_vtk (const std::string &filename)
@@ -289,6 +290,36 @@ private:
     const index_type last_right_side_spin_segment = first_available_element_id++;
     elements_starts[last_right_side_spin_segment] = first_available_node_id - 1;
     elements_ends[last_right_side_spin_segment] = segments_count * 4 + 0;
+  }
+
+  void fill_main_spin_and_ropes ()
+  {
+    auto get_y = [this] (data_type x_arg)
+    {
+      /// y = A*x^2 + B*x + C
+      const data_type x = x_arg - side_length - main_part_length / 2;
+      const data_type a = 0.0003662109375;
+      const data_type c = bridge_height + 4;
+
+      return a * x * x + c;
+    };
+
+
+    bool first_right_spine_segment = true;
+    for (index_type segment_id = (side_length + segment_length) / segment_length;
+         segment_id < (side_length + main_part_length - segment_length) / segment_length;
+         segment_id++)
+      {
+        const index_type rope_bottom = segment_id * 4 + 1;
+        const index_type rope_top = first_available_node_id++;
+        const index_type rope = first_available_element_id++;
+
+        nodes_xs[rope_top] = segment_length * segment_id + segment_length / 2;
+        nodes_ys[rope_top] = get_y (nodes_xs[rope_top]);
+
+        elements_starts[rope] = rope_bottom;
+        elements_ends[rope] = rope_top;
+      }
   }
 
 private:
