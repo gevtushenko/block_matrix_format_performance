@@ -255,6 +255,11 @@ private:
     /// Left
     auto get_y_right = get_line_eq (tower_height, bridge_height, side_length + main_part_length, main_part_length + 2 * side_length);
 
+    const index_type first_right_side_spin_segment = first_available_element_id++;
+    elements_starts[first_right_side_spin_segment] = right_tower_top;
+    elements_ends[first_right_side_spin_segment] = first_available_node_id;
+
+    bool first_right_spine_segment = true;
     for (index_type segment_id = (side_length + main_part_length + segment_length) / segment_length;
          segment_id < (main_part_length + 2 * side_length - segment_length) / segment_length;
          segment_id++)
@@ -268,11 +273,22 @@ private:
 
         elements_starts[rope] = rope_bottom;
         elements_ends[rope] = rope_top;
+
+        if (first_right_spine_segment)
+          {
+            first_right_spine_segment = false;
+          }
+        else
+          {
+            const index_type spin = first_available_element_id++;
+            elements_starts[spin] = rope_top - 1;
+            elements_ends[spin] = rope_top;
+          }
       }
 
-    // const index_type last_left_side_spin_segment = first_available_element_id++;
-    // elements_starts[last_left_side_spin_segment] = first_available_node_id - 1;
-    // elements_ends[last_left_side_spin_segment] = left_tower_top;
+    const index_type last_right_side_spin_segment = first_available_element_id++;
+    elements_starts[last_right_side_spin_segment] = first_available_node_id - 1;
+    elements_ends[last_right_side_spin_segment] = segments_count * 4 + 0;
   }
 
 private:
