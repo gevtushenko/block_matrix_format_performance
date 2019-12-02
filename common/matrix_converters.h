@@ -45,6 +45,27 @@ public:
       }
   }
 
+  index_type size () const
+  {
+    return nnzb * bs * bs;
+  }
+
+  data_type *get_block_data (index_type row, index_type block_in_row)
+  {
+    return values.get() + (row_ptr[row] + block_in_row) * bs * bs;
+  }
+
+  data_type *get_block_data_by_column (index_type row, index_type column)
+  {
+    index_type block_in_row =
+      std::distance (
+        columns.get () + row_ptr[row],
+        std::lower_bound (columns.get () + row_ptr[row], columns.get () + row_ptr[row + 1], column)
+      );
+
+    return get_block_data (row, block_in_row);
+  }
+
 public:
   const index_type n_rows {};
   const index_type n_cols {};

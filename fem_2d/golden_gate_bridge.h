@@ -60,7 +60,7 @@ class golden_gate_bridge_2d
    *       3    4    5
    */
 
-  constexpr static const index_type block_size = 4; ///< Local stiffness matrix size
+  constexpr static const index_type stiffness_matrix_block_size = 4; ///< Local stiffness matrix size
   const data_type segment_length = 10; ///< Size of segment in meters
   const data_type side_length = 345.0; ///< Size from bridge tower to bank in meters
   const data_type main_part_length = 1280.0; ///< Size from tower to tower in meters
@@ -98,11 +98,14 @@ public:
     , nodes_count (calculate_nodes_count())
     , nodes_xs (new data_type[nodes_count])
     , nodes_ys (new data_type[nodes_count])
+    , nodes_x_bc (new int[nodes_count])
+    , nodes_y_bc (new int[nodes_count])
     , elements_areas (new data_type[elements_count])
     , elements_e (new data_type[elements_count])
     , dxs (new data_type[elements_count])
     , dys (new data_type[elements_count])
     , lens (new data_type[elements_count])
+    , stiffness_matrix (new data_type[stiffness_matrix_block_size * stiffness_matrix_block_size * elements_count])
     , elements_starts (new index_type[elements_count])
     , elements_ends (new index_type[elements_count])
   {
@@ -110,6 +113,8 @@ public:
     std::fill_n (elements_ends.get (), elements_count, 0);
     std::fill_n (nodes_xs.get (), nodes_count, 0.0);
     std::fill_n (nodes_ys.get (), nodes_count, 0.0);
+    std::fill_n (nodes_x_bc.get (), nodes_count, 0);
+    std::fill_n (nodes_y_bc.get (), nodes_count, 0);
 
     fill_road_part ();
     fill_tower_part ();
@@ -121,8 +126,7 @@ public:
 
     finalize_elements ();
     calculate_local_stiffness_matrices ();
-
-    matrix = std::make_unique<bcsr_matrix_class<data_type, index_type>> (nodes_count, nodes_count, block_size, elements_count);
+    assemble_matrix ();
   }
 
   void write_vtk (const std::string &filename)
@@ -256,6 +260,11 @@ private:
 
     right_tower_bottom = first_available_node_id++;
     right_tower_top = first_available_node_id++;
+
+    nodes_x_bc[left_tower_bottom] = 1;
+    nodes_y_bc[left_tower_bottom] = 1;
+    nodes_x_bc[right_tower_bottom] = 1;
+    nodes_y_bc[right_tower_bottom] = 1;
 
     const index_type left_tower = first_available_element_id++;
     const index_type right_tower = first_available_element_id++;
@@ -403,10 +412,9 @@ private:
 
   void calculate_local_stiffness_matrices ()
   {
-    std::array<data_type, block_size * block_size> k_prime;
-    std::array<data_type, block_size * block_size> beta_prime;
-    std::array<data_type, block_size * block_size> tmp_block;
-    std::array<data_type, block_size * block_size> stiffness_matrix;
+    std::array<data_type, stiffness_matrix_block_size * stiffness_matrix_block_size> k_prime;
+    std::array<data_type, stiffness_matrix_block_size * stiffness_matrix_block_size> beta_prime;
+    std::array<data_type, stiffness_matrix_block_size * stiffness_matrix_block_size> tmp_block;
 
     for (index_type element = 0; element < elements_count; element++)
       {
@@ -431,10 +439,10 @@ private:
         ///   | 3   |    0 |  0 |    0 |  0 |
         ///   +-----------------------------+
 
-        k_prime[0 * block_size + 0] =  ae_over_l;
-        k_prime[0 * block_size + 2] = -ae_over_l;
-        k_prime[2 * block_size + 0] = -ae_over_l;
-        k_prime[2 * block_size + 2] =  ae_over_l;
+        k_prime[0 * stiffness_matrix_block_size + 0] =  ae_over_l;
+        k_prime[0 * stiffness_matrix_block_size + 2] = -ae_over_l;
+        k_prime[2 * stiffness_matrix_block_size + 0] = -ae_over_l;
+        k_prime[2 * stiffness_matrix_block_size + 2] =  ae_over_l;
 
         /// 1) We need to fill elements of rotation matrix beta prime
         ///
@@ -450,20 +458,122 @@ private:
         ///   | 3   |   0 |   0 |-sin | cos |
         ///   +-----------------------------+
 
-        beta_prime[0 * block_size + 0] =  cos_theta;
-        beta_prime[0 * block_size + 1] =  sin_theta;
-        beta_prime[1 * block_size + 0] = -sin_theta;
-        beta_prime[1 * block_size + 1] =  cos_theta;
+        beta_prime[0 * stiffness_matrix_block_size + 0] =  cos_theta;
+        beta_prime[0 * stiffness_matrix_block_size + 1] =  sin_theta;
+        beta_prime[1 * stiffness_matrix_block_size + 0] = -sin_theta;
+        beta_prime[1 * stiffness_matrix_block_size + 1] =  cos_theta;
 
-        beta_prime[2 * block_size + 2] =  cos_theta;
-        beta_prime[2 * block_size + 3] =  sin_theta;
-        beta_prime[3 * block_size + 2] = -sin_theta;
-        beta_prime[3 * block_size + 3] =  cos_theta;
+        beta_prime[2 * stiffness_matrix_block_size + 2] =  cos_theta;
+        beta_prime[2 * stiffness_matrix_block_size + 3] =  sin_theta;
+        beta_prime[3 * stiffness_matrix_block_size + 2] = -sin_theta;
+        beta_prime[3 * stiffness_matrix_block_size + 3] =  cos_theta;
 
         /// 2) We need to calculate global stiffness matrix for this element: [k_e] = [Beta_e]^T [k^{'}_{e}] [Beta_e]
-        matrix_mult_matrix (k_prime.data(), beta_prime.data(), tmp_block.data(), block_size);
-        matrix_transponse_and_mult (beta_prime.data(), tmp_block.data(), stiffness_matrix.data(), block_size);
+        matrix_mult_matrix (k_prime.data(), beta_prime.data(), tmp_block.data(), stiffness_matrix_block_size);
+        matrix_transponse_and_mult (
+          beta_prime.data(),
+          tmp_block.data(),
+          stiffness_matrix.get () + stiffness_matrix_block_size * stiffness_matrix_block_size + element,
+          stiffness_matrix_block_size);
       }
+  }
+
+  void assemble_matrix ()
+  {
+    matrix = std::make_unique<bcsr_matrix_class<data_type, index_type>> (
+      nodes_count /* n_rows */,
+      nodes_count /* n_cols */,
+      2 /* block_size - {x, y} for each node */,
+      nodes_count + 2 * elements_count /* nnzb */); ///< Each element is presented by two entries in matrix (f->s, s->f) + diagonal elements
+
+    std::fill_n (
+      matrix->values.get (),
+      matrix->size (),
+      0.0);
+
+    index_type *row_ptr = matrix->row_ptr.get ();
+    std::fill_n (row_ptr, matrix->n_rows, 1); ///< Always count diagonal elements
+
+    for (index_type element = 0; element < elements_count; element++)
+      for (auto &node: {elements_starts[element], elements_ends[element]})
+        row_ptr[node]++;
+
+    {
+      index_type offset = 0;
+      for (index_type row = 0; row < matrix->n_rows; row++)
+        {
+          const index_type tmp = row_ptr[row];
+          row_ptr[row] = offset;
+          offset += tmp;
+        }
+      row_ptr[matrix->n_rows] = offset;
+    }
+
+    index_type *columns = matrix->columns.get ();
+
+    for (index_type row = 0; row < matrix->n_rows; row++)
+      columns[row_ptr[row]] = row; /// Add diag part
+
+    std::unique_ptr<index_type[]> count (new index_type[nodes_count]);
+    std::fill_n (count.get (), nodes_count, 1);
+
+    for (index_type element = 0; element < elements_count; element++)
+      {
+        const index_type begin = elements_starts[element];
+        const index_type end = elements_ends[element];
+
+        columns[row_ptr[begin] + count[begin]++] = end; /// Cross-connection
+        columns[row_ptr[end]   + count[end]++  ] = begin;
+      }
+
+    for (index_type row = 0; row < matrix->n_rows; row++)
+      {
+        if (count[row] != row_ptr[row + 1] - row_ptr[row])
+          std::cerr << "Global stiffness matrix assembling is broken!" << std::endl;
+
+        std::sort (columns + row_ptr[row], columns + row_ptr[row + 1]);
+      }
+
+    for (index_type element = 0; element < elements_count; element++)
+      {
+        const index_type begin = elements_starts[element];
+        const index_type end = elements_ends[element];
+
+        const data_type *stiffness = get_element_local_stiffness_matrix (element);
+        const index_type bs = matrix->bs;
+
+        {
+          data_type *diag = matrix->get_block_data_by_column (begin, begin);
+
+          for (index_type i = 0; i < bs; i++)
+            for (index_type j = 0; j < bs; j++)
+              diag[i * bs + j] += stiffness[i * bs + j];
+
+          data_type *off_diag = matrix->get_block_data_by_column (begin, end);
+          for (index_type i = 0; i < bs; i++)
+            for (index_type j = 0; j < bs; j++)
+              off_diag[i * bs + j] = stiffness[bs * bs + i * bs + j];
+        }
+
+        {
+          data_type *diag = matrix->get_block_data_by_column (end, end);
+
+          for (index_type i = 0; i < bs; i++)
+            for (index_type j = 0; j < bs; j++)
+              diag[i * bs + j] += stiffness[stiffness_matrix_block_size * 2 + bs * bs + i * bs + j];
+
+          data_type *off_diag = matrix->get_block_data_by_column (end, begin);
+          for (index_type i = 0; i < bs; i++)
+            for (index_type j = 0; j < bs; j++)
+              off_diag[i * bs + j] = stiffness[stiffness_matrix_block_size * 2 + i * bs + j];
+        }
+      }
+  }
+
+private:
+  data_type *get_element_local_stiffness_matrix (index_type element)
+  {
+    return stiffness_matrix.get () + element * stiffness_matrix_block_size * stiffness_matrix_block_size;
   }
 
 private:
@@ -471,12 +581,17 @@ private:
   std::unique_ptr<data_type[]> nodes_xs;
   std::unique_ptr<data_type[]> nodes_ys;
 
+  std::unique_ptr<int[]> nodes_x_bc;
+  std::unique_ptr<int[]> nodes_y_bc;
+
   std::unique_ptr<data_type[]> elements_areas;
   std::unique_ptr<data_type[]> elements_e;
 
   std::unique_ptr<data_type[]> dxs;  ///< Higher node id minus lower node id!
   std::unique_ptr<data_type[]> dys;  ///< Higher node id minus lower node id!
   std::unique_ptr<data_type[]> lens; ///< Higher node id minus lower node id!
+
+  std::unique_ptr<data_type[]> stiffness_matrix;
 
   std::unique_ptr<index_type[]> elements_starts;
   std::unique_ptr<index_type[]> elements_ends;
