@@ -542,30 +542,49 @@ private:
         const data_type *stiffness = get_element_local_stiffness_matrix (element);
         const index_type bs = matrix->bs;
 
+        int bc_begin[2] = {
+          nodes_x_bc[begin],
+          nodes_y_bc[begin]
+        };
+
+        int bc_end[2] = {
+          nodes_x_bc[end],
+          nodes_y_bc[end]
+        };
+
         {
+
           data_type *diag = matrix->get_block_data_by_column (begin, begin);
 
           for (index_type i = 0; i < bs; i++)
-            for (index_type j = 0; j < bs; j++)
-              diag[i * bs + j] += stiffness[i * bs + j];
+            if (!bc_begin[i])
+              for (index_type j = 0; j < bs; j++)
+                if (!bc_begin[j])
+                  diag[i * bs + j] += stiffness[i * bs + j];
 
           data_type *off_diag = matrix->get_block_data_by_column (begin, end);
           for (index_type i = 0; i < bs; i++)
-            for (index_type j = 0; j < bs; j++)
-              off_diag[i * bs + j] = stiffness[bs * bs + i * bs + j];
+            if (!bc_begin[i])
+              for (index_type j = 0; j < bs; j++)
+                if (!bc_end[j])
+                  off_diag[i * bs + j] = stiffness[bs * bs + i * bs + j];
         }
 
         {
           data_type *diag = matrix->get_block_data_by_column (end, end);
 
           for (index_type i = 0; i < bs; i++)
-            for (index_type j = 0; j < bs; j++)
-              diag[i * bs + j] += stiffness[stiffness_matrix_block_size * 2 + bs * bs + i * bs + j];
+            if (!bc_end[i])
+              for (index_type j = 0; j < bs; j++)
+                if (!bc_end[j])
+                  diag[i * bs + j] += stiffness[stiffness_matrix_block_size * 2 + bs * bs + i * bs + j];
 
           data_type *off_diag = matrix->get_block_data_by_column (end, begin);
           for (index_type i = 0; i < bs; i++)
-            for (index_type j = 0; j < bs; j++)
-              off_diag[i * bs + j] = stiffness[stiffness_matrix_block_size * 2 + i * bs + j];
+            if (!bc_end[i])
+              for (index_type j = 0; j < bs; j++)
+                if (!bc_begin[j])
+                  off_diag[i * bs + j] = stiffness[stiffness_matrix_block_size * 2 + i * bs + j];
         }
       }
   }
