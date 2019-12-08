@@ -80,18 +80,21 @@ class golden_gate_bridge_2d
   index_type right_tower_bottom {};
   index_type right_tower_top {};
 
-  const data_type rope_e = 190; // steel?
-  const data_type tower_e = 190; // steel?
-  const data_type segment_e = 190; // steel?
-  const data_type spin_e = 190; // steel?
+  const data_type steel_e = 19000;
+  const data_type rope_e = steel_e;
+  const data_type tower_e = steel_e;
+  const data_type segment_e = steel_e;
+  const data_type spin_e = steel_e;
 
   const data_type spin_a = 0.924; /// meters
-  const data_type rope_a = 0.3; /// meters
+  const data_type rope_a = 0.068; /// meters
   const data_type tower_a = 5.0; /// meters
-  const data_type segment_a = 0.3; /// meters
+  const data_type segment_a = 0.45; /// meters
 
 public:
-  explicit golden_gate_bridge_2d (data_type segment_length_arg = 7.62)
+
+  template <typename function_type>
+  explicit golden_gate_bridge_2d (const function_type &load, data_type segment_length_arg = 7.62)
     : segment_length (segment_length_arg)
     , segments_count (calculate_segments_count())
     , elements_count (calculate_elements_count())
@@ -106,6 +109,7 @@ public:
     , dys (new data_type[elements_count])
     , lens (new data_type[elements_count])
     , stiffness_matrix (new data_type[stiffness_matrix_block_size * stiffness_matrix_block_size * elements_count])
+    , forces_rhs (new data_type[2 * nodes_count])
     , elements_starts (new index_type[elements_count])
     , elements_ends (new index_type[elements_count])
   {
@@ -115,11 +119,39 @@ public:
     std::fill_n (nodes_ys.get (), nodes_count, 0.0);
     std::fill_n (nodes_x_bc.get (), nodes_count, 0);
     std::fill_n (nodes_y_bc.get (), nodes_count, 0);
+    std::fill_n (forces_rhs.get (), 2 * nodes_count, 0.0);
 
     fill_road_part ();
     fill_tower_part ();
     fill_side_spin_and_ropes ();
     fill_main_spin_and_ropes ();
+
+    if (false)
+      {
+        nodes_xs[0] = 0;
+        nodes_xs[1] = 1;
+        nodes_ys[0] = 0;
+        nodes_ys[1] = 0;
+
+        set_element (0, 0, 1, 1.0, 100);
+
+        first_available_node_id = 2;
+        first_available_element_id = 1;
+
+        nodes_x_bc[0] = 1;
+        nodes_y_bc[0] = 1;
+        nodes_x_bc[1] = 0;
+        nodes_y_bc[1] = 0;
+
+        forces_rhs[0] = 0;
+        forces_rhs[1] = 0;
+        forces_rhs[2] = 1000;
+        forces_rhs[3] = 0;
+        // nodes_y_bc[1] = 1;
+
+        // nodes_x_bc[2] = 1;
+        // nodes_y_bc[3] = 1;
+      }
 
     elements_count = first_available_element_id;
     nodes_count = first_available_node_id;
@@ -127,9 +159,70 @@ public:
     finalize_elements ();
     calculate_local_stiffness_matrices ();
     assemble_matrix ();
+
+    for (index_type segment_id = 0; segment_id < segments_count; segment_id++)
+      {
+        const index_type n_1 = segment_id * 4 + 0;
+        const index_type n_2 = segment_id * 4 + 1;
+
+        std::tie (forces_rhs[n_1 * 2 + 0], forces_rhs[n_1 * 2 + 1]) = load (nodes_xs[n_1]);
+        std::tie (forces_rhs[n_2 * 2 + 0], forces_rhs[n_2 * 2 + 1]) = load (nodes_xs[n_2]);
+      }
+
+    // export nodes
+    {
+      std::ofstream nodes ("nodes");
+      nodes << nodes_count << "\n";
+
+      for (index_type node = 0; node < nodes_count; node++)
+        nodes << node << " " << nodes_xs[node] << " " << nodes_ys[node] << "\n";
+      nodes << std::endl;
+    }
+
+    // export forces
+    {
+      std::ofstream forces ("forces");
+      forces << nodes_count << "\n";
+
+      for (index_type node = 0; node < nodes_count; node++)
+        forces << node << " " << forces_rhs[node * 2 + 0] << " " << forces_rhs[node * 2 + 1] << "\n";
+      forces << std::endl;
+    }
+
+    // export elements
+    {
+      std::ofstream elements ("elements");
+      elements << elements_count << "\n";
+
+      for (index_type element = 0; element < elements_count; element++)
+        elements << element << " " << elements_starts[element]
+                            << " " << elements_ends[element] << " "
+                 << elements_areas[element]
+                 << " " << elements_e[element] << "\n";
+      elements << std::endl;
+
+      index_type bc_count = 0;
+      for (index_type node = 0; node < nodes_count; node++)
+        {
+          if (nodes_x_bc[node])
+            bc_count++;
+          if (nodes_y_bc[node])
+            bc_count++;
+        }
+
+      elements << bc_count << "\n";
+
+      for (index_type node = 0; node < nodes_count; node++)
+        {
+          if (nodes_x_bc[node])
+            elements << node << " 0\n";
+          if (nodes_y_bc[node])
+            elements << node << " 1\n";
+        }
+    }
   }
 
-  void write_vtk (const std::string &filename)
+  void write_vtk (const std::string &filename, const data_type *displacement = nullptr)
   {
     std::ofstream vtk (filename);
 
@@ -140,9 +233,18 @@ public:
 
     vtk << "POINTS " << nodes_count << " double\n";
 
-    for (index_type node_id = 0; node_id < nodes_count; node_id++)
-      vtk << nodes_xs[node_id] << " "
-          << nodes_ys[node_id] << " 0\n";
+    if (displacement)
+      {
+        for (index_type node_id = 0; node_id < nodes_count; node_id++)
+          vtk << nodes_xs[node_id] + displacement[node_id * 2 + 0] << " "
+              << nodes_ys[node_id] + displacement[node_id * 2 + 1] << " 0\n";
+      }
+    else
+      {
+        for (index_type node_id = 0; node_id < nodes_count; node_id++)
+          vtk << nodes_xs[node_id] << " "
+              << nodes_ys[node_id] << " 0\n";
+      }
 
     vtk << "CELLS " << elements_count << " " << 3 * elements_count << "\n";
 
@@ -158,8 +260,8 @@ public:
 private:
   void set_element (index_type id, index_type begin, index_type end, data_type area, data_type e /* young's modulus */)
   {
-    elements_starts[id] = begin;
-    elements_ends[id] = end;
+    elements_starts[id] = std::min (begin, end);
+    elements_ends[id] = std::max (begin, end);
     elements_areas[id] = area;
     elements_e[id] = e;
   }
@@ -193,6 +295,13 @@ private:
   void fill_road_part ()
   {
     const data_type dx = segment_length / 2;
+
+    nodes_x_bc[0] = 1;
+    nodes_y_bc[0] = 1;
+
+    nodes_x_bc[2] = 1;
+    nodes_y_bc[2] = 1;
+
     for (index_type segment_id = 0; segment_id < segments_count; segment_id++)
       {
         /// n_1 < n_2 < n_3 < n_4
@@ -245,6 +354,12 @@ private:
 
     nodes_ys[n_1] = bridge_height;
     nodes_ys[n_3] = bridge_height - section_height;
+
+    nodes_x_bc[n_1] = 1;
+    nodes_y_bc[n_1] = 1;
+
+    nodes_x_bc[n_3] = 1;
+    nodes_y_bc[n_3] = 1;
 
     const index_type e = segments_count * 8 + 0;
     set_element (e, n_1, n_3, segment_a, segment_e);
@@ -473,7 +588,7 @@ private:
         matrix_transponse_and_mult (
           beta_prime.data(),
           tmp_block.data(),
-          stiffness_matrix.get () + stiffness_matrix_block_size * stiffness_matrix_block_size + element,
+          stiffness_matrix.get () + stiffness_matrix_block_size * stiffness_matrix_block_size * element,
           stiffness_matrix_block_size);
       }
   }
@@ -560,14 +675,14 @@ private:
             if (!bc_begin[i])
               for (index_type j = 0; j < bs; j++)
                 if (!bc_begin[j])
-                  diag[i * bs + j] += stiffness[i * bs + j];
+                  diag[i * bs + j] += stiffness[i * stiffness_matrix_block_size + j];
 
           data_type *off_diag = matrix->get_block_data_by_column (begin, end);
           for (index_type i = 0; i < bs; i++)
             if (!bc_begin[i])
               for (index_type j = 0; j < bs; j++)
                 if (!bc_end[j])
-                  off_diag[i * bs + j] = stiffness[bs * bs + i * bs + j];
+                  off_diag[i * bs + j] = stiffness[i * stiffness_matrix_block_size + j + bs];
         }
 
         {
@@ -577,14 +692,14 @@ private:
             if (!bc_end[i])
               for (index_type j = 0; j < bs; j++)
                 if (!bc_end[j])
-                  diag[i * bs + j] += stiffness[stiffness_matrix_block_size * 2 + bs * bs + i * bs + j];
+                  diag[i * bs + j] += stiffness[stiffness_matrix_block_size * 2 + i * stiffness_matrix_block_size + j + bs];
 
           data_type *off_diag = matrix->get_block_data_by_column (end, begin);
           for (index_type i = 0; i < bs; i++)
             if (!bc_end[i])
               for (index_type j = 0; j < bs; j++)
                 if (!bc_begin[j])
-                  off_diag[i * bs + j] = stiffness[stiffness_matrix_block_size * 2 + i * bs + j];
+                  off_diag[i * bs + j] = stiffness[stiffness_matrix_block_size * 2 + i * stiffness_matrix_block_size + j];
         }
       }
   }
@@ -617,6 +732,7 @@ private:
 
 public:
   std::unique_ptr<bcsr_matrix_class<data_type, index_type>> matrix;
+  std::unique_ptr<data_type[]> forces_rhs;
 };
 
 #endif //BLOCK_MATRIX_FORMAT_PERFORMANCE_GOLDEN_GATE_BRIDGE_H

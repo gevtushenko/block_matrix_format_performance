@@ -2,6 +2,7 @@
 #include "matrix_converters.h"
 
 #include "gpu_matrix_multiplier.h"
+#include "bicgstab.h"
 
 #include "fem_2d/golden_gate_bridge.h"
 
@@ -179,8 +180,20 @@ int main ()
         perform_measurements<float, int> (bs, 70'000, 6);
     }
 
-  golden_gate_bridge_2d<float, int> bridge_2d;
-  bridge_2d.write_vtk ("output.vtk");
+  auto load = [] (double x) -> std::pair<double, double> {
+    if (x > 345 && x < 345 + 1280)
+      return {0, -0.1};
+    return {0, 0};
+  };
+
+  golden_gate_bridge_2d<double, int> bridge_2d (load, 17.62);
+  bridge_2d.write_vtk ("output_1.vtk");
+
+  auto matrix = std::make_unique<csr_matrix_class<double , int>> (*bridge_2d.matrix);
+
+  gpu_bicgstab<double, int> solver (*matrix);
+  auto solution = solver.solve (*matrix, bridge_2d.forces_rhs.get (), 1.e-5, 10000);
+  bridge_2d.write_vtk ("output_2.vtk", solution);
 
   return 0;
 }
