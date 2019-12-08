@@ -180,21 +180,24 @@ int main ()
         perform_measurements<float, int> (bs, 70'000, 6);
     }
 
-  auto load = [] (double x) -> std::pair<double, double> {
-    const double mid_point = 965;
+  const double side_length = 345.0; ///< Size from bridge tower to bank in meters
+  const double main_part_length = 2.6 * 1280.0; ///< Size from tower to tower in meters
+
+  auto load = [=] (double x) -> std::pair<double, double> {
+    const double mid_point = (main_part_length + side_length * 2) / 2;
     const double window = 200;
     if (x > mid_point - window && x < mid_point + window)
-      return {0, -1000000.0};
+      return {0, -100000.0};
     return {0, 0};
   };
 
-  golden_gate_bridge_2d<double, int> bridge_2d (load, 7.62);
+  golden_gate_bridge_2d<double, int> bridge_2d (load, main_part_length, side_length, 260, 7.62);
   bridge_2d.write_vtk ("output_1.vtk");
 
   auto matrix = std::make_unique<csr_matrix_class<double , int>> (*bridge_2d.matrix);
 
   gpu_bicgstab<double, int> solver (*matrix);
-  auto solution = solver.solve (*matrix, bridge_2d.forces_rhs.get (), 1.e-1, 100000);
+  auto solution = solver.solve (*matrix, bridge_2d.forces_rhs.get (), 5e-1, 100000);
   bridge_2d.write_vtk ("output_2.vtk", solution);
 
   return 0;

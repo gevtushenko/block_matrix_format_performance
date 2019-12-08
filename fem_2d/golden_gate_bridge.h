@@ -61,12 +61,13 @@ class golden_gate_bridge_2d
    */
 
   constexpr static const index_type stiffness_matrix_block_size = 4; ///< Local stiffness matrix size
-  const data_type segment_length = 10; ///< Size of segment in meters
   const data_type side_length = 345.0; ///< Size from bridge tower to bank in meters
   const data_type main_part_length = 1280.0; ///< Size from tower to tower in meters
   const data_type tower_height = 230.0; ///< Height of tower in meters (from water level)
   const data_type bridge_height = 78.0;
   const data_type section_height = 7.62; ///< In meters
+
+  const data_type segment_length = 10; ///< Size of segment in meters
   const index_type segments_count {};
 
   index_type elements_count {};
@@ -96,8 +97,16 @@ class golden_gate_bridge_2d
 public:
 
   template <typename function_type>
-  explicit golden_gate_bridge_2d (const function_type &load, data_type segment_length_arg = 7.62)
-    : segment_length (segment_length_arg)
+  explicit golden_gate_bridge_2d (
+    const function_type &load,
+    data_type main_part_length_arg,
+    data_type side_length_arg,
+    data_type tower_height_arg = 230.0,
+    data_type segment_length_arg = 7.62)
+    : main_part_length (main_part_length_arg)
+    , side_length (side_length_arg)
+    , tower_height (tower_height_arg)
+    , segment_length (segment_length_arg)
     , segments_count (calculate_segments_count())
     , elements_count (calculate_elements_count())
     , nodes_count (calculate_nodes_count())
