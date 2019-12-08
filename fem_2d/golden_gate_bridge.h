@@ -80,6 +80,8 @@ class golden_gate_bridge_2d
   index_type right_tower_bottom {};
   index_type right_tower_top {};
 
+  index_type last_road_node {};
+
   const data_type steel_e = 2e+11;
   const data_type rope_e = steel_e;
   const data_type tower_e = steel_e;
@@ -364,6 +366,8 @@ private:
     const index_type e = segments_count * 8 + 0;
     set_element (e, n_1, n_3, segment_a, segment_e);
 
+    last_road_node = n_1;
+
     first_available_node_id = n_3 + 1;
     first_available_element_id = e + 1;
   }
@@ -410,7 +414,7 @@ private:
     };
 
     /// Left
-    auto get_y_left = get_line_eq (bridge_height, tower_height, 0, side_length);
+    auto get_y_left = get_line_eq (bridge_height, tower_height, 0, nodes_xs[left_tower_top]);
     const index_type first_left_side_spin_segment = first_available_element_id++;
 
     set_element (first_left_side_spin_segment, 0, first_available_node_id, rope_a, rope_e);
@@ -442,7 +446,7 @@ private:
     set_element (last_left_side_spin_segment, first_available_node_id - 1, left_tower_top, spin_a, spin_e);
 
     /// Left
-    auto get_y_right = get_line_eq (tower_height, bridge_height, side_length + main_part_length, main_part_length + 2 * side_length);
+    auto get_y_right = get_line_eq (tower_height, bridge_height, nodes_xs[right_tower_top], nodes_xs[last_road_node]);
 
     const index_type first_right_side_spin_segment = first_available_element_id++;
     set_element (first_right_side_spin_segment, right_tower_top, first_available_node_id, spin_a, spin_e);
