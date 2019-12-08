@@ -1231,5 +1231,6 @@ std::vector<measurement_class> gpu_bcsr_spmv (
   template std::vector<measurement_class> gpu_bcsr_spmv (bcsr_matrix_class<DTYPE, ITYPE> &matrix, const DTYPE *reference_y);
 
 INSTANTIATE (float,int)
+INSTANTIATE (double,int)
 
 #undef INSTANTIATE

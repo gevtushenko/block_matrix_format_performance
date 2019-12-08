@@ -508,7 +508,7 @@ private:
     const auto y_1 = nodes_ys[left_tower_top];
 
     const auto x_2 = (main_part_length + 2 * side_length) / 2;
-    const auto y_2 = bridge_height + section_height + 4;
+    const auto y_2 = bridge_height + 1;
 
     const auto x_3 = nodes_xs[right_tower_top];
     const auto y_3 = nodes_ys[right_tower_top];
