@@ -80,7 +80,7 @@ class golden_gate_bridge_2d
   index_type right_tower_bottom {};
   index_type right_tower_top {};
 
-  const data_type steel_e = 19000;
+  const data_type steel_e = 2e+11;
   const data_type rope_e = steel_e;
   const data_type tower_e = steel_e;
   const data_type segment_e = steel_e;
@@ -88,7 +88,7 @@ class golden_gate_bridge_2d
 
   const data_type spin_a = 0.924; /// meters
   const data_type rope_a = 0.068; /// meters
-  const data_type tower_a = 5.0; /// meters
+  const data_type tower_a = 2.00; /// meters
   const data_type segment_a = 0.45; /// meters
 
 public:

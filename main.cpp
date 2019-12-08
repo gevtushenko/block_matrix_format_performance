@@ -181,18 +181,20 @@ int main ()
     }
 
   auto load = [] (double x) -> std::pair<double, double> {
-    if (x > 345 && x < 345 + 1280)
-      return {0, -0.1};
+    const double mid_point = 965;
+    const double window = 200;
+    if (x > mid_point - window && x < mid_point + window)
+      return {0, -1000000.0};
     return {0, 0};
   };
 
-  golden_gate_bridge_2d<double, int> bridge_2d (load, 17.62);
+  golden_gate_bridge_2d<double, int> bridge_2d (load, 7.62);
   bridge_2d.write_vtk ("output_1.vtk");
 
   auto matrix = std::make_unique<csr_matrix_class<double , int>> (*bridge_2d.matrix);
 
   gpu_bicgstab<double, int> solver (*matrix);
-  auto solution = solver.solve (*matrix, bridge_2d.forces_rhs.get (), 1.e-5, 10000);
+  auto solution = solver.solve (*matrix, bridge_2d.forces_rhs.get (), 1.e-1, 100000);
   bridge_2d.write_vtk ("output_2.vtk", solution);
 
   return 0;
