@@ -266,6 +266,14 @@ public:
 
     for (unsigned int element_id = 0; element_id < elements_count; element_id++)
       vtk << "3\n"; ///< VTK_LINE
+
+    vtk << "POINT_DATA " << nodes_count << "\n";
+    vtk << "SCALARS AvgDisplacement double 1\n";
+    vtk << "LOOKUP_TABLE default\n";
+
+    for (index_type node = 0; node < nodes_count; node++)
+      vtk << (displacement ? (std::abs (displacement[node * 2 + 0]) + std::abs (displacement[node * 2 + 1])) / 2 : 0.0) << "\n";
+    vtk << "\n";
   }
 
 private:
