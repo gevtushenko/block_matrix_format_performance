@@ -181,13 +181,13 @@ int main ()
     }
 
   const double side_length = 345.0; ///< Size from bridge tower to bank in meters
-  const double main_part_length = 2.6 * 1280.0; ///< Size from tower to tower in meters
+  const double main_part_length = 3.6 * 1280.0; ///< Size from tower to tower in meters
 
   auto load = [=] (double x) -> std::pair<double, double> {
     const double mid_point = (main_part_length + side_length * 2) / 2;
-    const double window = 200;
+    const double window = 1800;
     if (x > mid_point - window && x < mid_point + window)
-      return {0, -100000.0};
+      return {0, -40000.0};
     return {0, 0};
   };
 
