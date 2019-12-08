@@ -269,7 +269,7 @@ private:
   index_type calculate_segments_count ()
   {
     const data_type total_length = main_part_length + 2 * side_length;
-    return total_length / segment_length;
+    return total_length / segment_length + 1;
   }
 
   index_type calculate_elements_count ()
@@ -384,8 +384,8 @@ private:
     const index_type left_tower = first_available_element_id++;
     const index_type right_tower = first_available_element_id++;
 
-    nodes_xs[left_tower_bottom]  = nodes_xs[left_tower_top]  = side_length;
-    nodes_xs[right_tower_bottom] = nodes_xs[right_tower_top] = side_length + main_part_length;
+    nodes_xs[left_tower_bottom]  = nodes_xs[left_tower_top]  = std::round (side_length / segment_length) * segment_length + segment_length / 2;
+    nodes_xs[right_tower_bottom] = nodes_xs[right_tower_top] = std::round ((side_length + main_part_length) / segment_length) * segment_length + segment_length / 2;
 
     nodes_ys[right_tower_bottom] = nodes_ys[left_tower_bottom] = 0.0;
     nodes_ys[right_tower_top] = nodes_ys[left_tower_top] = tower_height;
@@ -433,6 +433,11 @@ private:
           }
       }
 
+    {
+      const index_type rope_bottom = int (side_length / segment_length) * 4 + 1;
+      set_element (first_available_element_id++, left_tower_top, rope_bottom, rope_a, rope_e);
+    }
+
     const index_type last_left_side_spin_segment = first_available_element_id++;
     set_element (last_left_side_spin_segment, first_available_node_id - 1, left_tower_top, spin_a, spin_e);
 
@@ -466,6 +471,11 @@ private:
             set_element (spin, rope_top - 1, rope_top, spin_a, spin_e);
           }
       }
+
+    {
+      const index_type rope_bottom = int (side_length + main_part_length + segment_length/2) / segment_length * 4 + 1;
+      set_element (first_available_element_id++, right_tower_top, rope_bottom, rope_a, rope_e);
+    }
 
     const index_type last_right_side_spin_segment = first_available_element_id++;
     set_element (last_right_side_spin_segment, first_available_node_id - 1, segments_count * 4 + 0, spin_a, spin_e);
