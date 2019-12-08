@@ -483,14 +483,32 @@ private:
 
   void fill_main_spin_and_ropes ()
   {
-    auto get_y = [this] (data_type x_arg)
+    const auto x_1 = nodes_xs[left_tower_top];
+    const auto y_1 = nodes_ys[left_tower_top];
+
+    const auto x_2 = (main_part_length + 2 * side_length) / 2;
+    const auto y_2 = bridge_height + section_height + 4;
+
+    const auto x_3 = nodes_xs[right_tower_top];
+    const auto y_3 = nodes_ys[right_tower_top];
+
+    const auto A_1 = x_2 * x_2 - (x_1 * x_1);
+    const auto B_1 = x_2 - x_1;
+    const auto D_1 = y_2 - y_1;
+    const auto A_2 = x_3 * x_3 - x_2 * x_2;
+    const auto B_2 = x_3 - x_2;
+    const auto D_2 = y_3 - y_2;
+    const auto B_mult = -(B_2 / B_1);
+    const auto A_3 = B_mult * A_1 + A_2;
+    const auto D_3 = B_mult * D_1 + D_2;
+    const auto a = D_3 / A_3;
+    const auto b = (D_1 - A_1 * a) / B_1;
+    const auto c = y_1 - a * x_1 * x_1 - b * x_1;
+
+    auto get_y = [=] (data_type x)
     {
       /// y = A*x^2 + B*x + C
-      const data_type x = x_arg - side_length - main_part_length / 2;
-      const data_type a = 0.0003662109375;
-      const data_type c = bridge_height + 4;
-
-      return a * x * x + c;
+      return a * x * x + b * x + c;
     };
 
     const index_type first_spin_segment = first_available_element_id++;
