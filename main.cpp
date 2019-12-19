@@ -64,7 +64,7 @@ measurement_class cpu_csr_spmv_single_thread_naive (
 
 double size_to_gb (size_t size)
 {
-  return static_cast<double> (size) / 1024 / 1024/ 1024;
+  return static_cast<double> (size) / 1024 / 1024 / 1024;
 }
 
 class time_printer
@@ -80,8 +80,7 @@ public:
   explicit time_printer (
     double reference_time,
     std::optional<double> parallel_ref = std::nullopt)
-    : reference (reference_time)
-    , parallel_reference (move (parallel_ref))
+    : reference (reference_time), parallel_reference (move (parallel_ref))
   {
   }
 
@@ -113,13 +112,13 @@ public:
   }
 };
 
-template <typename data_type, typename index_type>
+template<typename data_type, typename index_type>
 void perform_measurements (
   csr_matrix_class<data_type, index_type> &matrix,
   bcsr_matrix_class<data_type, index_type> &block_matrix
-  )
+)
 {
-  auto measure_multiple_times = [&] (const std::function<measurement_class(bool)> &action)
+  auto measure_multiple_times = [&] (const std::function<measurement_class (bool)> &action)
   {
     measurement_class result;
     const unsigned int measurements_count = 20;
@@ -133,9 +132,10 @@ void perform_measurements (
   const index_type bs = block_matrix.bs;
   std::unique_ptr<data_type> reference_answer (new data_type[n_rows * bs]);
   std::unique_ptr<data_type> x (new data_type[n_rows * bs]);
-  auto cpu_naive = measure_multiple_times ([&] (bool) {
-    return cpu_csr_spmv_single_thread_naive (matrix, x.get (), reference_answer.get ());
-  });
+  auto cpu_naive = measure_multiple_times ([&] (bool)
+                                           {
+                                             return cpu_csr_spmv_single_thread_naive (matrix, x.get (), reference_answer.get ());
+                                           });
 
   time_printer single_core_timer (cpu_naive.get_elapsed ());
   single_core_timer.print_time (cpu_naive);
@@ -152,13 +152,13 @@ void perform_measurements (
     single_core_timer.print_time (elapsed);
 }
 
-template <typename data_type, typename index_type>
+template<typename data_type, typename index_type>
 void measure_diag_matrices (
   index_type bs,
   index_type n_rows,
   index_type blocks_per_row,
   bool debug_info = false
-  )
+)
 {
   const size_t nnz = n_rows * blocks_per_row * bs * bs;
 
@@ -169,8 +169,10 @@ void measure_diag_matrices (
   if (debug_info)
     {
       std::cout << "Required memory: \n"
-                << "\tCSR  => DATA: " << size_to_gb (matrix_and_vectors_data_size) << " GB; EXTRA: " << size_to_gb (csr_extra_data_size) << "\n"
-                << "\tBCSR => DATA: " << size_to_gb (matrix_and_vectors_data_size) << " GB; EXTRA: " << size_to_gb (bcsr_extra_data_size) << std::endl;
+                << "\tCSR  => DATA: " << size_to_gb (matrix_and_vectors_data_size) << " GB; EXTRA: "
+                << size_to_gb (csr_extra_data_size) << "\n"
+                << "\tBCSR => DATA: " << size_to_gb (matrix_and_vectors_data_size) << " GB; EXTRA: "
+                << size_to_gb (bcsr_extra_data_size) << std::endl;
     }
 
   fmt::print (fmt::fg (fmt::color::tomato), "\nBS: {}\n", bs);
@@ -181,7 +183,7 @@ void measure_diag_matrices (
   perform_measurements (*matrix, *block_matrix);
 }
 
-template <typename data_type, typename index_type>
+template<typename data_type, typename index_type>
 void measure_golden_bridge (
   bool solve = false
 )
@@ -189,16 +191,17 @@ void measure_golden_bridge (
   const data_type side_length = 345.0; ///< Size from bridge tower to bank in meters
   const data_type main_part_length = 1280.0; ///< Size from tower to tower in meters
 
-  auto load = [=] (data_type x) -> std::pair<data_type, data_type> {
+  auto load = [=] (data_type x) -> std::pair<data_type, data_type>
+  {
     const data_type mid_poindex_type = (main_part_length + side_length * 2) / 2;
-    const data_type window = 300;
+    const data_type window = 450;
     if (x > mid_poindex_type - window && x < mid_poindex_type + window)
-      return {0, -20000000.0};
+      return {0, -2000000.0};
     return {0, 0};
   };
 
   golden_gate_bridge_2d<data_type, index_type, true> bridge_2d (load, main_part_length, side_length, 260, 7.62);
-  auto matrix = std::make_unique<csr_matrix_class<data_type , index_type>> (*bridge_2d.matrix);
+  auto matrix = std::make_unique<csr_matrix_class<data_type, index_type>> (*bridge_2d.matrix);
 
   if (solve)
     {
@@ -213,7 +216,6 @@ void measure_golden_bridge (
       perform_measurements (*matrix, *bridge_2d.matrix);
     }
 }
-
 
 int main ()
 {
