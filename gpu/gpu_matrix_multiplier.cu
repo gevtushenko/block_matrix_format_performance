@@ -834,6 +834,7 @@ std::vector<measurement_class> gpu_bcsr_spmv (
         {
           case  1: bcsr_spmv_kernel_block_per_block_row_warp_per_row_row_major_matrix<data_type, index_type, 1> <<<grid_size, block_size>>> (matrix.n_rows, d_columns, d_row_ptr, d_values, d_x, d_y); break;
           case  2: bcsr_spmv_kernel_block_per_block_row_warp_per_row_row_major_matrix<data_type, index_type, 2> <<<grid_size, block_size>>> (matrix.n_rows, d_columns, d_row_ptr, d_values, d_x, d_y); break;
+          case  3: bcsr_spmv_kernel_block_per_block_row_warp_per_row_row_major_matrix<data_type, index_type, 3> <<<grid_size, block_size>>> (matrix.n_rows, d_columns, d_row_ptr, d_values, d_x, d_y); break;
           case  4: bcsr_spmv_kernel_block_per_block_row_warp_per_row_row_major_matrix<data_type, index_type, 4> <<<grid_size, block_size>>> (matrix.n_rows, d_columns, d_row_ptr, d_values, d_x, d_y); break;
           case  8: bcsr_spmv_kernel_block_per_block_row_warp_per_row_row_major_matrix<data_type, index_type, 8> <<<grid_size, block_size>>> (matrix.n_rows, d_columns, d_row_ptr, d_values, d_x, d_y); break;
           case 16: bcsr_spmv_kernel_block_per_block_row_warp_per_row_row_major_matrix<data_type, index_type,16> <<<grid_size, block_size>>> (matrix.n_rows, d_columns, d_row_ptr, d_values, d_x, d_y); break;
@@ -1013,6 +1014,7 @@ std::vector<measurement_class> gpu_bcsr_spmv (
       {
         case  1: bcsr_spmv_kernel_block_per_block_row_thread_per_row_column_major_matrix_template<data_type, index_type, 1> <<<grid_size, block_size>>> (matrix.n_rows, d_columns, d_row_ptr, d_values, d_x, d_y); break;
         case  2: bcsr_spmv_kernel_block_per_block_row_thread_per_row_column_major_matrix_template<data_type, index_type, 2> <<<grid_size, block_size>>> (matrix.n_rows, d_columns, d_row_ptr, d_values, d_x, d_y); break;
+        case  3: bcsr_spmv_kernel_block_per_block_row_thread_per_row_column_major_matrix_template<data_type, index_type, 3> <<<grid_size, block_size>>> (matrix.n_rows, d_columns, d_row_ptr, d_values, d_x, d_y); break;
         case  4: bcsr_spmv_kernel_block_per_block_row_thread_per_row_column_major_matrix_template<data_type, index_type, 4> <<<grid_size, block_size>>> (matrix.n_rows, d_columns, d_row_ptr, d_values, d_x, d_y); break;
         case  8: bcsr_spmv_kernel_block_per_block_row_thread_per_row_column_major_matrix_template<data_type, index_type, 8> <<<grid_size, block_size>>> (matrix.n_rows, d_columns, d_row_ptr, d_values, d_x, d_y); break;
         case 16: bcsr_spmv_kernel_block_per_block_row_thread_per_row_column_major_matrix_template<data_type, index_type,16> <<<grid_size, block_size>>> (matrix.n_rows, d_columns, d_row_ptr, d_values, d_x, d_y); break;
@@ -1106,6 +1108,7 @@ std::vector<measurement_class> gpu_bcsr_spmv (
       {
         case  1: bcsr_spmv_kernel_block_per_block_row_thread_per_row_column_major_matrix_coal_x_template<data_type, index_type, 1> <<<grid_size, block_size, block_size.x * sizeof (data_type)>>> (d_columns, d_row_ptr, d_values, d_x, d_y); break;
         case  2: bcsr_spmv_kernel_block_per_block_row_thread_per_row_column_major_matrix_coal_x_template<data_type, index_type, 2> <<<grid_size, block_size, block_size.x * sizeof (data_type)>>> (d_columns, d_row_ptr, d_values, d_x, d_y); break;
+        case  3: bcsr_spmv_kernel_block_per_block_row_thread_per_row_column_major_matrix_coal_x_template<data_type, index_type, 3> <<<grid_size, block_size, block_size.x * sizeof (data_type)>>> (d_columns, d_row_ptr, d_values, d_x, d_y); break;
         case  4: bcsr_spmv_kernel_block_per_block_row_thread_per_row_column_major_matrix_coal_x_template<data_type, index_type, 4> <<<grid_size, block_size, block_size.x * sizeof (data_type)>>> (d_columns, d_row_ptr, d_values, d_x, d_y); break;
         case  8: bcsr_spmv_kernel_block_per_block_row_thread_per_row_column_major_matrix_coal_x_template<data_type, index_type, 8> <<<grid_size, block_size, block_size.x * sizeof (data_type)>>> (d_columns, d_row_ptr, d_values, d_x, d_y); break;
         case 16: bcsr_spmv_kernel_block_per_block_row_thread_per_row_column_major_matrix_coal_x_template<data_type, index_type,16> <<<grid_size, block_size, block_size.x * sizeof (data_type)>>> (d_columns, d_row_ptr, d_values, d_x, d_y); break;
@@ -1220,48 +1223,51 @@ std::vector<measurement_class> gpu_bcsr_spmv (
   compare_results (y_size, reference_y, cpu_y.get ());
 
   /// po2
-  {
-    dim3 block_size = dim3 (512);
-    dim3 grid_size {};
-
-    grid_size.x = (y_size + block_size.x - 1) / block_size.x;
-    fill_vector<data_type><<<grid_size, block_size>>> (y_size, d_y, 1.0);
-  }
-
-  {
-    cudaEvent_t start, stop;
-    cudaEventCreate (&start);
-    cudaEventCreate (&stop);
-
-    cudaDeviceSynchronize ();
-    cudaEventRecord (start);
-
+  if (matrix.bs != 3)
     {
-      dim3 block_size = 32;
-      dim3 grid_size {};
+      {
+        dim3 block_size = dim3 (512);
+        dim3 grid_size {};
 
-      grid_size.x = (matrix.n_rows * 32 + block_size.x - 1) / block_size.x;
+        grid_size.x = (y_size + block_size.x - 1) / block_size.x;
+        fill_vector<data_type><<<grid_size, block_size>>> (y_size, d_y, 1.0);
+      }
 
-      bcsr_spmv_kernel_column_by_column_po2<data_type, index_type> <<<grid_size, block_size, block_size.x * sizeof (data_type)>>> (
-        matrix.bs, d_columns, d_row_ptr, d_values, d_x, d_y);
+      {
+        cudaEvent_t start, stop;
+        cudaEventCreate (&start);
+        cudaEventCreate (&stop);
+
+        cudaDeviceSynchronize ();
+        cudaEventRecord (start);
+
+        {
+          dim3 block_size = 32;
+          dim3 grid_size {};
+
+          grid_size.x = (matrix.n_rows * 32 + block_size.x - 1) / block_size.x;
+
+          bcsr_spmv_kernel_column_by_column_po2<data_type, index_type> <<<grid_size, block_size, block_size.x * sizeof (data_type)>>> (
+            matrix.bs, d_columns, d_row_ptr, d_values, d_x, d_y);
+        }
+
+        cudaEventRecord (stop);
+        cudaEventSynchronize (stop);
+
+        float milliseconds = 0;
+        cudaEventElapsedTime (&milliseconds, start, stop);
+        const double elapsed = milliseconds / 1000;
+
+        cudaEventDestroy (start);
+        cudaEventDestroy (stop);
+
+        results.emplace_back ("GPU BCSR (column major, column-by-column, int po2)", elapsed, 0, 0);
+      }
+
+      std::fill_n (cpu_y.get (), y_size, 0.0);
+      cudaMemcpy (cpu_y.get (), d_y, y_size * sizeof (data_type), cudaMemcpyDeviceToHost);
+      compare_results (y_size, reference_y, cpu_y.get ());
     }
-
-    cudaEventRecord (stop);
-    cudaEventSynchronize (stop);
-
-    float milliseconds = 0;
-    cudaEventElapsedTime (&milliseconds, start, stop);
-    const double elapsed = milliseconds / 1000;
-
-    cudaEventDestroy (start);
-    cudaEventDestroy (stop);
-
-    results.emplace_back ("GPU BCSR (column major, column-by-column, int po2)", elapsed, 0, 0);
-  }
-
-  std::fill_n (cpu_y.get (), y_size, 0.0);
-  cudaMemcpy (cpu_y.get (), d_y, y_size * sizeof (data_type), cudaMemcpyDeviceToHost);
-  compare_results (y_size, reference_y, cpu_y.get ());
 
   /// template
   {
@@ -1290,6 +1296,7 @@ std::vector<measurement_class> gpu_bcsr_spmv (
         {
           case  1: bcsr_spmv_kernel_column_by_column_template<data_type, index_type, 1> <<<grid_size, block_size, block_size.x * sizeof (data_type)>>> (d_columns, d_row_ptr, d_values, d_x, d_y); break;
           case  2: bcsr_spmv_kernel_column_by_column_template<data_type, index_type, 2> <<<grid_size, block_size, block_size.x * sizeof (data_type)>>> (d_columns, d_row_ptr, d_values, d_x, d_y); break;
+          case  3: bcsr_spmv_kernel_column_by_column_template<data_type, index_type, 3> <<<grid_size, block_size, block_size.x * sizeof (data_type)>>> (d_columns, d_row_ptr, d_values, d_x, d_y); break;
           case  4: bcsr_spmv_kernel_column_by_column_template<data_type, index_type, 4> <<<grid_size, block_size, block_size.x * sizeof (data_type)>>> (d_columns, d_row_ptr, d_values, d_x, d_y); break;
           case  8: bcsr_spmv_kernel_column_by_column_template<data_type, index_type, 8> <<<grid_size, block_size, block_size.x * sizeof (data_type)>>> (d_columns, d_row_ptr, d_values, d_x, d_y); break;
           case 16: bcsr_spmv_kernel_column_by_column_template<data_type, index_type,16> <<<grid_size, block_size, block_size.x * sizeof (data_type)>>> (d_columns, d_row_ptr, d_values, d_x, d_y); break;

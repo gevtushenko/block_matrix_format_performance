@@ -5,6 +5,8 @@
 #ifndef BLOCK_MATRIX_FORMAT_PERFORMANCE_MATRIX_CONVERTERS_H
 #define BLOCK_MATRIX_FORMAT_PERFORMANCE_MATRIX_CONVERTERS_H
 
+#include "mmio.h"
+
 #include <algorithm>
 #include <memory>
 
@@ -111,6 +113,33 @@ public:
       }
 
     row_ptr[n_rows] = offset;
+  }
+
+  void write_mm (const std::string &filename)
+  {
+    FILE *fp = fopen (filename.c_str(), "w");
+    MM_typecode matcode;
+
+    mm_initialize_typecode(&matcode);
+    mm_set_matrix(&matcode);
+    mm_set_coordinate(&matcode);
+    mm_set_real(&matcode);
+
+    mm_write_banner(fp, matcode);
+    mm_write_mtx_crd_size(fp, n_rows, n_cols, nnz);
+
+    /* NOTE: matrix market files use 1-based indices, i.e. first element
+      of a vector has index 1, not 0.  */
+
+    for (index_type row = 0; row < n_rows; row++)
+      {
+        for (index_type element = row_ptr[row]; element < row_ptr[row + 1]; element++)
+          {
+            fprintf(fp, "%d %d %10.20g\n", row + 1, columns[element] + 1, values[element]);
+          }
+      }
+
+    fclose (fp);
   }
 
 public:

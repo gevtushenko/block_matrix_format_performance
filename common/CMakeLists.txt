@@ -1,6 +1,8 @@
 project(common)
 
 set(COMMON_SOURCES
+        mmio.h
+        mmio.c
         matrix_converters.h
         measurement_class.cpp
         measurement_class.h)

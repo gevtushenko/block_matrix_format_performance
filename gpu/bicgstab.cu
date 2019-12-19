@@ -21,7 +21,7 @@ inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=t
 }
 
 template <class T, class C>
-gpu_bicgstab<T, C>::gpu_bicgstab (const csr_matrix_class<T, C> &A_cpu)
+gpu_bicgstab<T, C>::gpu_bicgstab (const csr_matrix_class<T, C> &A_cpu, bool use_precond)
   : n_rows (A_cpu.n_rows)
   , n_elements (A_cpu.nnz)
 {
@@ -64,6 +64,13 @@ gpu_bicgstab<T, C>::gpu_bicgstab (const csr_matrix_class<T, C> &A_cpu)
   gpuCheck(cudaMalloc ((void **) &offsets_to_rows_begin, offsets_vector_size));
 
   gpuCheck(cudaMallocHost ((void**) &h_x, double_vectors_size));
+
+  if (use_precond)
+    {
+      gpuCheck(cudaMalloc ((void **) &P, n_rows * sizeof (double)));
+      gpuCheck(cudaMalloc ((void **) &q, n_rows * sizeof (double)));
+      gpuCheck(cudaMalloc ((void **) &z, n_rows * sizeof (double)));
+    }
 }
 
 template <class T, class C>
@@ -88,6 +95,13 @@ gpu_bicgstab<T, C>::~gpu_bicgstab()
   gpuCheck(cudaFree (offsets_to_rows_begin));
 
   gpuCheck(cudaFreeHost (h_x));
+
+  if (P)
+    {
+      gpuCheck (cudaFree (P));
+      gpuCheck (cudaFree (q));
+      gpuCheck (cudaFree (z));
+    }
 }
 
 template <class T>
@@ -182,6 +196,45 @@ __device__ void matrix_vector_multiplication (const T * __restrict__ a, const T 
 
       y[row] = sum;
     }
+}
+
+template <typename T, typename C>
+__global__ void calculate_jacobi_preconditioner (
+  const T * __restrict__ a,
+  const C * __restrict__ offsets_to_rows_begin,
+  const C * __restrict__ column_indices,
+  T * __restrict__ P,
+  C n)
+{
+  unsigned int row = threadIdx.x + blockIdx.x * blockDim.x;
+
+  if (row < n)
+    {
+      C row_begin = offsets_to_rows_begin[row];
+      C row_end = offsets_to_rows_begin[row + 1];
+
+      for (C element = row_begin; element < row_end; element++)
+        {
+          if (column_indices[element] == row)
+            {
+              P[row] = fabs (a[element]) < 1e-20 ? 1.0 : 1.0 / a[element];
+              return;
+            }
+        }
+    }
+}
+
+template <typename T, typename C>
+__global__ void apply_preconditioner (
+  const T * __restrict__ P,
+  const T * __restrict__ v,
+        T * __restrict__ q,
+  C n)
+{
+  unsigned int row = threadIdx.x + blockIdx.x * blockDim.x;
+
+  if (row < n)
+    q[row] = P[row] * v[row];
 }
 
 template <class T, class C>
@@ -289,7 +342,6 @@ __global__ void bicgstab_1011_kernel (
   T *h,
   T *s,
   T *t,
-  T *xc,
   T *rc,
   T omegac,
   const unsigned int n)
@@ -299,9 +351,25 @@ __global__ void bicgstab_1011_kernel (
 
   while (row < n)
     {
-      xc[row] = h[row] + (omegac) * s[row];
       rc[row] = s[row] - (omegac) * t[row];
+      row += stride;
+    }
+}
 
+template <class T>
+__global__ void bicgstab_1012_kernel (
+  T *h,
+  T *s,
+  T *xc,
+  T omegac,
+  const unsigned int n)
+{
+  unsigned int row = threadIdx.x + blockIdx.x * blockDim.x;
+  const unsigned int stride = blockDim.x * gridDim.x;
+
+  while (row < n)
+    {
+      xc[row] = h[row] + (omegac) * s[row];
       row += stride;
     }
 }
@@ -351,6 +419,8 @@ T *gpu_bicgstab<T, C>::solve (const csr_matrix_class<T, C> &A_cpu, const T* b, T
 
   T alpha = 1.0;
 
+  if (P)
+    calculate_jacobi_preconditioner<T,C> <<<blocks, threads>>> (A, offsets_to_rows_begin, column_indices, P, n_rows);
   bicgstab_init_kernel<T> <<<blocks, threads>>> (rhs, x, r, v, p, h, s, t, rh, n_rows);
 
   for (unsigned int i = 0; i < max_iterations; )
@@ -381,8 +451,13 @@ T *gpu_bicgstab<T, C>::solve (const csr_matrix_class<T, C> &A_cpu, const T* b, T
       T beta = rhoc / rhop * alpha / omegap;
       bicgstab_23_kernel<T> <<<blocks, threads>>> (pc, pp, rp, vp, beta, omegap, n_rows);
 
+      if (P)
+        apply_preconditioner<T, C> <<<blocks, threads>>> (P, pc, q, n_rows);
+      else
+        q = pc;
+
       /// 4 - vi = A pi
-      gpu_matrix_vector_multiplication<T, C, matrix_block_size> (A, pc, vc, offsets_to_rows_begin, column_indices, n_rows);
+      gpu_matrix_vector_multiplication<T, C, matrix_block_size> (A, q, vc, offsets_to_rows_begin, column_indices, n_rows);
 
       /// 5 - alpha = rhoi / (rh0, vi)
       dot_product_kernel<T, 32> <<<blocks, threads>>> (rh, vc, tmp + 3, n_rows);
@@ -392,10 +467,15 @@ T *gpu_bicgstab<T, C>::solve (const csr_matrix_class<T, C> &A_cpu, const T* b, T
 
       /// 6 - h = xp + alpha * pi
       /// 7 - s = rp - alpha * vi
-      bicgstab_67_kernel<T> <<<blocks, threads>>> (h, s, xp, rp, pc, vc, alpha, n_rows);
+      bicgstab_67_kernel<T> <<<blocks, threads>>> (h, s, xp, rp, q, vc, alpha, n_rows);
+
+      if (P)
+        apply_preconditioner<T, C> <<<blocks, threads>>> (P, s, z, n_rows);
+      else
+        z = s;
 
       /// 8 - t = A s
-      gpu_matrix_vector_multiplication<T, C, matrix_block_size> (A, s, t, offsets_to_rows_begin, column_indices, n_rows);
+      gpu_matrix_vector_multiplication<T, C, matrix_block_size> (A, z, t, offsets_to_rows_begin, column_indices, n_rows);
 
       cudaMemset (tmp, 0, sizeof (T) * 2);
 
@@ -407,9 +487,11 @@ T *gpu_bicgstab<T, C>::solve (const csr_matrix_class<T, C> &A_cpu, const T* b, T
 
       omegac = ts_and_tt_prod[0] / ts_and_tt_prod[1];
 
-      /// 10 - xi = h + omegai * s
-      /// 11 - ri = s - imegai * t
-      bicgstab_1011_kernel<T> <<<blocks, threads>>> (h, s, t, xc, rc, omegac, n_rows);
+      /// 10 - ri = s - imegai * t
+      bicgstab_1011_kernel<T> <<<blocks, threads>>> (h, s, t, rc, omegac, n_rows);
+
+      /// 11 - xi = h + omegai * s
+      bicgstab_1012_kernel<T> <<<blocks, threads>>> (h, z, xc, omegac, n_rows);
 
       /// 12 Check norms
       dot_product_kernel<T, 32> <<<blocks, threads>>> (rc, rc, tmp + 4, n_rows);

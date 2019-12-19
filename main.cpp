@@ -177,6 +177,8 @@ void measure_diag_matrices (
 
   auto block_matrix = gen_n_diag_bcsr<data_type, index_type> (n_rows, blocks_per_row, bs);
   auto matrix = std::make_unique<csr_matrix_class<data_type, index_type>> (*block_matrix);
+
+  perform_measurements (*matrix, *block_matrix);
 }
 
 template <typename data_type, typename index_type>
@@ -185,24 +187,25 @@ void measure_golden_bridge (
 )
 {
   const data_type side_length = 345.0; ///< Size from bridge tower to bank in meters
-  const data_type main_part_length = 3.6 * 1280.0; ///< Size from tower to tower in meters
+  const data_type main_part_length = 1280.0; ///< Size from tower to tower in meters
 
   auto load = [=] (data_type x) -> std::pair<data_type, data_type> {
     const data_type mid_poindex_type = (main_part_length + side_length * 2) / 2;
-    const data_type window = 1800;
+    const data_type window = 300;
     if (x > mid_poindex_type - window && x < mid_poindex_type + window)
-      return {0, -40000.0};
+      return {0, -20000000.0};
     return {0, 0};
   };
 
-  golden_gate_bridge_2d<data_type, index_type> bridge_2d (load, main_part_length, side_length, 260, 7.62);
+  golden_gate_bridge_2d<data_type, index_type, true> bridge_2d (load, main_part_length, side_length, 260, 7.62);
   auto matrix = std::make_unique<csr_matrix_class<data_type , index_type>> (*bridge_2d.matrix);
 
   if (solve)
     {
+      matrix->write_mm ("matrix.mtx");
       bridge_2d.write_vtk ("output_1.vtk");
-      gpu_bicgstab<data_type, index_type> solver (*matrix);
-      auto solution = solver.solve (*matrix, bridge_2d.forces_rhs.get (), 5e-1, 100000);
+      gpu_bicgstab<data_type, index_type> solver (*matrix, true);
+      auto solution = solver.solve (*matrix, bridge_2d.forces_rhs.get (), 0.8, 4000);
       bridge_2d.write_vtk ("output_2.vtk", solution);
     }
   else
@@ -217,10 +220,11 @@ int main ()
   cudaSetDevice (1);
 
   if (0)
-    for (auto &bs: {2, 4, 8, 16, 32})
+    for (auto &bs: {2, 4, 8})
       measure_diag_matrices<float, int> (bs, 70'000, 6);
 
-  measure_golden_bridge<double, int> (false);
+  if (1)
+    measure_golden_bridge<double, int> (true);
 
   return 0;
 }

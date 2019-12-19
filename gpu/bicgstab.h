@@ -14,7 +14,7 @@ class gpu_bicgstab
 {
 public:
   gpu_bicgstab () = delete;
-  explicit gpu_bicgstab (const csr_matrix_class<T, C> &A_b);
+  explicit gpu_bicgstab (const csr_matrix_class<T, C> &A_b, bool use_precond);
   ~gpu_bicgstab ();
 
   T *solve (const csr_matrix_class<T, C> &A, const T* b, T epsilon, unsigned int max_iterations);
@@ -40,6 +40,10 @@ private:
   T *A = nullptr;
   C *column_indices = nullptr; // TODO Move to matrix
   C *offsets_to_rows_begin = nullptr;
+
+  T *P = nullptr;
+  T *q = nullptr;
+  T *z = nullptr;
 };
 
 #endif //BLOCK_MATRIX_FORMAT_PERFORMANCE_BICGSTAB_H
