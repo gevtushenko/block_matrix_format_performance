@@ -23,6 +23,7 @@ measurement_class gpu_csr_vector_spmv (
 template <typename data_type, typename index_type>
 std::vector<measurement_class> gpu_bcsr_spmv (
   bcsr_matrix_class<data_type, index_type> &matrix,
+  const data_type *transpose_matrix_data,
   const data_type *reference_y);
 
 #endif //BLOCK_MATRIX_FORMAT_PERFORMANCE_GPU_MATRIX_MULTIPLIER_H

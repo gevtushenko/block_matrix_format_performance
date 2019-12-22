@@ -113,18 +113,22 @@ public:
 };
 
 template<typename data_type, typename index_type>
-void perform_measurements (
+std::unordered_map<std::string, double> perform_measurements (
   csr_matrix_class<data_type, index_type> &matrix,
   bcsr_matrix_class<data_type, index_type> &block_matrix
 )
 {
+  std::unordered_map<std::string, double> results;
+  const unsigned int measurements_count = 40;
   auto measure_multiple_times = [&] (const std::function<measurement_class (bool)> &action)
   {
     measurement_class result;
-    const unsigned int measurements_count = 20;
     for (unsigned int measurement_id = 0; measurement_id < measurements_count; measurement_id++)
       result += action (measurement_id == 0);
     result.finalize ();
+
+    results[result.get_format ()] = result.get_elapsed ();
+
     return result;
   };
 
@@ -140,20 +144,39 @@ void perform_measurements (
   time_printer single_core_timer (cpu_naive.get_elapsed ());
   single_core_timer.print_time (cpu_naive);
 
-  auto gpu_elapsed_csr = gpu_csr_spmv<data_type, index_type> (matrix, reference_answer.get ());
+  auto gpu_elapsed_csr = measure_multiple_times ([&] (bool) { return gpu_csr_spmv<data_type, index_type> (matrix, reference_answer.get ()); });
   single_core_timer.print_time (gpu_elapsed_csr);
 
-  auto gpu_elapsed_csr_vector = gpu_csr_vector_spmv<data_type, index_type> (matrix, reference_answer.get ());
+  auto gpu_elapsed_csr_vector = measure_multiple_times ([&] (bool) { return gpu_csr_vector_spmv<data_type, index_type> (matrix, reference_answer.get ()); });
   single_core_timer.print_time (gpu_elapsed_csr_vector);
 
-  auto bcsr_elapsed = gpu_bcsr_spmv<data_type, index_type> (block_matrix, reference_answer.get ());
+  std::unique_ptr<data_type[]> transposed_matrix_data (new data_type[block_matrix.size ()]);
+  block_matrix.transpose_blocks (transposed_matrix_data.get ());
 
-  for (auto &elapsed: bcsr_elapsed)
-    single_core_timer.print_time (elapsed);
+  std::vector<measurement_class> multiple_measurements = gpu_bcsr_spmv<data_type, index_type> (block_matrix, transposed_matrix_data.get (), reference_answer.get ());
+
+  for (unsigned int measurement_i = 0; measurement_i < measurements_count; measurement_i++)
+    {
+      auto new_result = gpu_bcsr_spmv<data_type, index_type> (block_matrix, transposed_matrix_data.get (), reference_answer.get ());
+
+      for (unsigned int i = 0; i < multiple_measurements.size(); i++)
+        multiple_measurements[i] += new_result[i];
+    }
+
+  for (auto &measure: multiple_measurements)
+    measure.finalize ();
+
+  for (auto &elapsed: multiple_measurements)
+    {
+      results[elapsed.get_format ()] = elapsed.get_elapsed ();
+      single_core_timer.print_time (elapsed);
+    }
+
+  return results;
 }
 
 template<typename data_type, typename index_type>
-void measure_diag_matrices (
+auto measure_diag_matrices (
   index_type bs,
   index_type n_rows,
   index_type blocks_per_row,
@@ -180,7 +203,7 @@ void measure_diag_matrices (
   auto block_matrix = gen_n_diag_bcsr<data_type, index_type> (n_rows, blocks_per_row, bs);
   auto matrix = std::make_unique<csr_matrix_class<data_type, index_type>> (*block_matrix);
 
-  perform_measurements (*matrix, *block_matrix);
+  return perform_measurements (*matrix, *block_matrix);
 }
 
 template<typename data_type, typename index_type>
@@ -189,7 +212,7 @@ void measure_golden_bridge (
 )
 {
   const data_type side_length = 345.0; ///< Size from bridge tower to bank in meters
-  const data_type main_part_length = 1280.0; ///< Size from tower to tower in meters
+  const data_type main_part_length = 100 * 1280.0; ///< Size from tower to tower in meters
 
   auto load = [=] (data_type x) -> std::pair<data_type, data_type>
   {
@@ -200,7 +223,7 @@ void measure_golden_bridge (
     return {0, 0};
   };
 
-  golden_gate_bridge_2d<data_type, index_type, true> bridge_2d (load, main_part_length, side_length, 260, 7.62);
+  golden_gate_bridge_2d<data_type, index_type, false> bridge_2d (load, main_part_length, side_length, 260, 7.62);
   auto matrix = std::make_unique<csr_matrix_class<data_type, index_type>> (*bridge_2d.matrix);
 
   if (solve)
@@ -208,7 +231,7 @@ void measure_golden_bridge (
       matrix->write_mm ("matrix.mtx");
       bridge_2d.write_vtk ("output_1.vtk");
       gpu_bicgstab<data_type, index_type> solver (*matrix, true);
-      auto solution = solver.solve (*matrix, bridge_2d.forces_rhs.get (), 0.8, 4000);
+      auto solution = solver.solve (*matrix, bridge_2d.forces_rhs.get (), 0.8, 1000);
       bridge_2d.write_vtk ("output_2.vtk", solution);
     }
   else
@@ -217,16 +240,25 @@ void measure_golden_bridge (
     }
 }
 
+#include "json.hpp"
+#include <fstream>
+
 int main ()
 {
   cudaSetDevice (1);
 
-  if (0)
-    for (auto &bs: {2, 4, 8})
-      measure_diag_matrices<float, int> (bs, 70'000, 6);
+  nlohmann::json json;
+  for (auto bs: {2, 4, 8, 16, 32})
+    {
+      auto result = measure_diag_matrices<float, int> (bs, 50'000, 6);
+      json[std::to_string(bs)] = result;
+    }
 
-  if (1)
-    measure_golden_bridge<double, int> (true);
+  std::ofstream os ("result.json");
+  os << json.dump (2) << std::endl;
+
+  if (0)
+    measure_golden_bridge<double, int> (false);
 
   return 0;
 }

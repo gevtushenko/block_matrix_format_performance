@@ -7,5 +7,7 @@ add_subdirectory(gpu)
 add_subdirectory(common)
 add_subdirectory(external/fmt)
 
+include_directories(external)
+
 add_executable(block_matrix_format_performance main.cpp fem_2d/golden_gate_bridge.h)
 target_link_libraries(block_matrix_format_performance common gpu fmt)

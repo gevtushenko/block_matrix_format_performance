@@ -29,7 +29,7 @@ public:
   {
   }
 
-  void transpose_blocks ()
+  void transpose_blocks (data_type *new_values)
   {
     std::unique_ptr<data_type[]> buffer (new data_type[bs * bs]);
 
@@ -37,12 +37,13 @@ public:
       {
         for (index_type block = row_ptr[row]; block < row_ptr[row + 1]; block++)
           {
-            data_type *block_data = values.get () + bs * bs * block;
-            std::copy_n (block_data, bs * bs, buffer.get ());
+            data_type *new_block_data = new_values + bs * bs * block;
+            data_type *old_block_data = values.get () + bs * bs * block;
+            std::copy_n (old_block_data, bs * bs, buffer.get ());
 
             for (unsigned int i = 0; i < bs; i++)
               for (unsigned int j = 0; j < bs; j++)
-                block_data[j * bs + i] = buffer[i * bs + j];
+                new_block_data[j * bs + i] = buffer[i * bs + j];
           }
       }
   }

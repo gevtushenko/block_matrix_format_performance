@@ -736,6 +736,7 @@ void cusparse_bsrmv (
 template <typename data_type, typename index_type>
 std::vector<measurement_class> gpu_bcsr_spmv (
   bcsr_matrix_class<data_type, index_type> &matrix,
+  const data_type *column_major_matrix,
   const data_type *reference_y)
 {
   std::vector<measurement_class> results;
@@ -800,7 +801,7 @@ std::vector<measurement_class> gpu_bcsr_spmv (
     cudaEventDestroy (start);
     cudaEventDestroy (stop);
 
-    results.emplace_back ("GPU BCSR (row major, block per block row, thread per row)", elapsed, 0, 0);
+    results.emplace_back ("GPU BCSR (row major, thread per row)", elapsed, 0, 0);
   }
 
   std::unique_ptr<data_type[]> cpu_y (new data_type[y_size]);
@@ -904,8 +905,7 @@ std::vector<measurement_class> gpu_bcsr_spmv (
     fill_vector<data_type><<<grid_size, block_size>>> (y_size, d_y, 1.0);
   }
 
-  matrix.transpose_blocks ();
-  cudaMemcpy (d_values, matrix.values.get (), matrix_size * sizeof (data_type), cudaMemcpyHostToDevice);
+  cudaMemcpy (d_values, column_major_matrix, matrix_size * sizeof (data_type), cudaMemcpyHostToDevice);
 
   /// cuSPARSE Column major
   {
@@ -981,7 +981,7 @@ std::vector<measurement_class> gpu_bcsr_spmv (
     cudaEventDestroy (start);
     cudaEventDestroy (stop);
 
-    results.emplace_back ("GPU BCSR (column major, block per block row, thread per row)", elapsed, 0, 0);
+    results.emplace_back ("GPU BCSR (column major, thread per row)", elapsed, 0, 0);
   }
 
   std::fill_n (cpu_y.get (), y_size, 0.0);
@@ -1032,7 +1032,7 @@ std::vector<measurement_class> gpu_bcsr_spmv (
     cudaEventDestroy (start);
     cudaEventDestroy (stop);
 
-    results.emplace_back ("GPU BCSR (column major, block per block row, thread per row, template)", elapsed, 0, 0);
+    results.emplace_back ("GPU BCSR (column major, thread per row, template)", elapsed, 0, 0);
   }
 
   std::fill_n (cpu_y.get (), y_size, 0.0);
@@ -1075,7 +1075,7 @@ std::vector<measurement_class> gpu_bcsr_spmv (
     cudaEventDestroy (start);
     cudaEventDestroy (stop);
 
-    results.emplace_back ("GPU BCSR (column major, block per block row, thread per row, coal x)", elapsed, 0, 0);
+    results.emplace_back ("GPU BCSR (column major, thread per row, coal x)", elapsed, 0, 0);
   }
 
   std::fill_n (cpu_y.get (), y_size, 0.0);
@@ -1126,7 +1126,7 @@ std::vector<measurement_class> gpu_bcsr_spmv (
     cudaEventDestroy (start);
     cudaEventDestroy (stop);
 
-    results.emplace_back ("GPU BCSR (column major, block per block row, thread per row, coal x, template)", elapsed, 0, 0);
+    results.emplace_back ("GPU BCSR (column major, thread per row, coal x, template)", elapsed, 0, 0);
   }
 
   std::fill_n (cpu_y.get (), y_size, 0.0);
@@ -1333,7 +1333,7 @@ std::vector<measurement_class> gpu_bcsr_spmv (
 #define INSTANTIATE(DTYPE,ITYPE) \
   template measurement_class gpu_csr_spmv (const csr_matrix_class<DTYPE, ITYPE> &matrix, const DTYPE *reference_y); \
   template measurement_class gpu_csr_vector_spmv (const csr_matrix_class<DTYPE, ITYPE> &matrix, const DTYPE *reference_y); \
-  template std::vector<measurement_class> gpu_bcsr_spmv (bcsr_matrix_class<DTYPE, ITYPE> &matrix, const DTYPE *reference_y);
+  template std::vector<measurement_class> gpu_bcsr_spmv (bcsr_matrix_class<DTYPE, ITYPE> &matrix, const DTYPE *, const DTYPE *reference_y);
 
 INSTANTIATE (float,int)
 INSTANTIATE (double,int)
