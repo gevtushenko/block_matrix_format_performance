@@ -1,0 +1,312 @@
+{
+  "10": {
+    "CPU CSR": 0.0215235731,
+    "GPU BCSR (column major, thread per row)": 0.0003589232117519714,
+    "GPU BCSR (row major, thread per row)": 0.0003523440012941137,
+    "GPU BSR (cuSPARSE, column major)": 0.0009714400017401204,
+    "GPU BSR (cuSPARSE, row major)": 0.000959564809454605,
+    "GPU CSR": 0.001806929614394903,
+    "GPU CSR-Vector": 0.0007104735908797011,
+    "GPU Merge SpMV": 0.0007006975938566029
+  },
+  "11": {
+    "CPU CSR": 0.027164830049999998,
+    "GPU BCSR (column major, thread per row)": 0.00045198559819255025,
+    "GPU BCSR (row major, thread per row)": 0.00042314720631111415,
+    "GPU BSR (cuSPARSE, column major)": 0.0009776080085430294,
+    "GPU BSR (cuSPARSE, row major)": 0.0009660079987952486,
+    "GPU CSR": 0.0021431792178191245,
+    "GPU CSR-Vector": 0.0008390016009798273,
+    "GPU Merge SpMV": 0.0008339696010807529
+  },
+  "12": {
+    "CPU CSR": 0.03204950205,
+    "GPU BCSR (column major, thread per row)": 0.0004910223971819506,
+    "GPU BCSR (row major, thread per row)": 0.0004916896039503626,
+    "GPU BSR (cuSPARSE, column major)": 0.0009929679974447936,
+    "GPU BSR (cuSPARSE, row major)": 0.0009816720092203468,
+    "GPU CSR": 0.002163272025063634,
+    "GPU CSR-Vector": 0.000941735997912474,
+    "GPU Merge SpMV": 0.0009796303987968714
+  },
+  "13": {
+    "CPU CSR": 0.04026227289999999,
+    "GPU BCSR (column major, thread per row)": 0.0005735615995945409,
+    "GPU BCSR (row major, thread per row)": 0.0005910992011195048,
+    "GPU BSR (cuSPARSE, column major)": 0.001015096003538929,
+    "GPU BSR (cuSPARSE, row major)": 0.0010035151994088666,
+    "GPU CSR": 0.0034416432259604334,
+    "GPU CSR-Vector": 0.0011129696038551628,
+    "GPU Merge SpMV": 0.0011421808041632176
+  },
+  "14": {
+    "CPU CSR": 0.046306746899999994,
+    "GPU BCSR (column major, thread per row)": 0.0006843776180176064,
+    "GPU BCSR (row major, thread per row)": 0.0006844848074251785,
+    "GPU BSR (cuSPARSE, column major)": 0.0010302127979230137,
+    "GPU BSR (cuSPARSE, row major)": 0.001019260796601884,
+    "GPU CSR": 0.004189889552071691,
+    "GPU CSR-Vector": 0.0012460479920264333,
+    "GPU Merge SpMV": 0.001317611214471981
+  },
+  "15": {
+    "CPU CSR": 0.05332454955,
+    "GPU BCSR (column major, thread per row)": 0.0008124847983708606,
+    "GPU BCSR (row major, thread per row)": 0.0008986800094135106,
+    "GPU BSR (cuSPARSE, column major)": 0.0010707919835112989,
+    "GPU BSR (cuSPARSE, row major)": 0.0010604752169456333,
+    "GPU CSR": 0.005163041618652641,
+    "GPU CSR-Vector": 0.0014346447889693082,
+    "GPU Merge SpMV": 0.0015014880045782775
+  },
+  "16": {
+    "CPU CSR": 0.0644398536,
+    "GPU BCSR (column major, thread per row)": 0.0008294208120787517,
+    "GPU BCSR (row major, thread per row)": 0.0010101232037413865,
+    "GPU BSR (cuSPARSE, column major)": 0.001074452797183767,
+    "GPU BSR (cuSPARSE, row major)": 0.0010638368083164095,
+    "GPU CSR": 0.0039091728278435765,
+    "GPU CSR-Vector": 0.001552428799914196,
+    "GPU Merge SpMV": 0.0016867199970874935
+  },
+  "17": {
+    "CPU CSR": 0.07440743335000001,
+    "GPU BCSR (column major, thread per row)": 0.0009537183970678598,
+    "GPU BCSR (row major, thread per row)": 0.0010400127910543233,
+    "GPU BSR (cuSPARSE, column major)": 0.003490771178621799,
+    "GPU BSR (cuSPARSE, row major)": 0.0033523296238854527,
+    "GPU CSR": 0.007508105621673167,
+    "GPU CSR-Vector": 0.0017850128177087754,
+    "GPU Merge SpMV": 0.0019107120111584663
+  },
+  "18": {
+    "CPU CSR": 0.08316126405,
+    "GPU BCSR (column major, thread per row)": 0.001057273626793176,
+    "GPU BCSR (row major, thread per row)": 0.0012669728021137416,
+    "GPU BSR (cuSPARSE, column major)": 0.0036056911922059953,
+    "GPU BSR (cuSPARSE, row major)": 0.003469136019703001,
+    "GPU CSR": 0.008937161602079868,
+    "GPU CSR-Vector": 0.0020394367980770766,
+    "GPU Merge SpMV": 0.0021407279884442685
+  },
+  "19": {
+    "CPU CSR": 0.09199513735000002,
+    "GPU BCSR (column major, thread per row)": 0.001177056017331779,
+    "GPU BCSR (row major, thread per row)": 0.00153837600373663,
+    "GPU BSR (cuSPARSE, column major)": 0.003727103990968317,
+    "GPU BSR (cuSPARSE, row major)": 0.003601097548380494,
+    "GPU CSR": 0.009694031858816742,
+    "GPU CSR-Vector": 0.0021835359861142934,
+    "GPU Merge SpMV": 0.0023783135693520308
+  },
+  "2": {
+    "CPU CSR": 0.00078948125,
+    "GPU BCSR (column major, thread per row)": 2.9476800227712376e-05,
+    "GPU BCSR (row major, thread per row)": 2.7953600238106446e-05,
+    "GPU BSR (cuSPARSE, column major)": 3.19135995596298e-05,
+    "GPU BSR (cuSPARSE, row major)": 3.387199994904222e-05,
+    "GPU CSR": 3.69072002285975e-05,
+    "GPU CSR-Vector": 8.859520057740156e-05,
+    "GPU Merge SpMV": 5.517759964277502e-05
+  },
+  "20": {
+    "CPU CSR": 0.10312311689999998,
+    "GPU BCSR (column major, thread per row)": 0.0012984096072614193,
+    "GPU BCSR (row major, thread per row)": 0.0016219791839830577,
+    "GPU BSR (cuSPARSE, column major)": 0.003835079970303923,
+    "GPU BSR (cuSPARSE, row major)": 0.003579987189732492,
+    "GPU CSR": 0.009892832022160292,
+    "GPU CSR-Vector": 0.0023817823850549756,
+    "GPU Merge SpMV": 0.002622275205794722
+  },
+  "21": {
+    "CPU CSR": 0.1134690781,
+    "GPU BCSR (column major, thread per row)": 0.0014288815960753708,
+    "GPU BCSR (row major, thread per row)": 0.0020809728186577557,
+    "GPU BSR (cuSPARSE, column major)": 0.003940948774106801,
+    "GPU BSR (cuSPARSE, row major)": 0.0037144863861612977,
+    "GPU CSR": 0.013368297647684813,
+    "GPU CSR-Vector": 0.002607649634592235,
+    "GPU Merge SpMV": 0.002872787183150649
+  },
+  "22": {
+    "CPU CSR": 0.12502673265000003,
+    "GPU BCSR (column major, thread per row)": 0.0015580303792376072,
+    "GPU BCSR (row major, thread per row)": 0.002461321570444852,
+    "GPU BSR (cuSPARSE, column major)": 0.004059073620010167,
+    "GPU BSR (cuSPARSE, row major)": 0.00373434720095247,
+    "GPU CSR": 0.014409886579960585,
+    "GPU CSR-Vector": 0.002881769626401365,
+    "GPU Merge SpMV": 0.003139400016516447
+  },
+  "23": {
+    "CPU CSR": 0.13770843584999998,
+    "GPU BCSR (column major, thread per row)": 0.0016970816010143607,
+    "GPU BCSR (row major, thread per row)": 0.003115833643823862,
+    "GPU BSR (cuSPARSE, column major)": 0.004170665540732444,
+    "GPU BSR (cuSPARSE, row major)": 0.003827147209085524,
+    "GPU CSR": 0.017910374328494072,
+    "GPU CSR-Vector": 0.003088798385579139,
+    "GPU Merge SpMV": 0.0034212656086310745
+  },
+  "24": {
+    "CPU CSR": 0.14990950435,
+    "GPU BCSR (column major, thread per row)": 0.0019244336290284991,
+    "GPU BCSR (row major, thread per row)": 0.002978432003874332,
+    "GPU BSR (cuSPARSE, column major)": 0.004273294378072024,
+    "GPU BSR (cuSPARSE, row major)": 0.00422016317024827,
+    "GPU CSR": 0.00927865426056087,
+    "GPU CSR-Vector": 0.003365759993903339,
+    "GPU Merge SpMV": 0.0037379120010882618
+  },
+  "25": {
+    "CPU CSR": 0.16196490574999997,
+    "GPU BCSR (column major, thread per row)": 0.0020463328051846474,
+    "GPU BCSR (row major, thread per row)": 0.0037014847970567645,
+    "GPU BSR (cuSPARSE, column major)": 0.0044485135469585655,
+    "GPU BSR (cuSPARSE, row major)": 0.004156948812305927,
+    "GPU CSR": 0.02192952632904053,
+    "GPU CSR-Vector": 0.003625068790279329,
+    "GPU Merge SpMV": 0.00401795522775501
+  },
+  "26": {
+    "CPU CSR": 0.17611390784999997,
+    "GPU BCSR (column major, thread per row)": 0.0021684064180590213,
+    "GPU BCSR (row major, thread per row)": 0.0042010896606370805,
+    "GPU BSR (cuSPARSE, column major)": 0.004538297560065985,
+    "GPU BSR (cuSPARSE, row major)": 0.004406843171454966,
+    "GPU CSR": 0.02275475496426225,
+    "GPU CSR-Vector": 0.003912696032784879,
+    "GPU Merge SpMV": 0.0043241663603112105
+  },
+  "27": {
+    "CPU CSR": 0.19041786835,
+    "GPU BCSR (column major, thread per row)": 0.0025525856181047857,
+    "GPU BCSR (row major, thread per row)": 0.006395744020119309,
+    "GPU BSR (cuSPARSE, column major)": 0.00458589915651828,
+    "GPU BSR (cuSPARSE, row major)": 0.004424969595856964,
+    "GPU CSR": 0.02483845455572009,
+    "GPU CSR-Vector": 0.004256796790286899,
+    "GPU Merge SpMV": 0.004644207982346415
+  },
+  "28": {
+    "CPU CSR": 0.20556734060000004,
+    "GPU BCSR (column major, thread per row)": 0.002527675242163241,
+    "GPU BCSR (row major, thread per row)": 0.004558774456381798,
+    "GPU BSR (cuSPARSE, column major)": 0.004588403180241585,
+    "GPU BSR (cuSPARSE, row major)": 0.004474286362528801,
+    "GPU CSR": 0.022981595061719418,
+    "GPU CSR-Vector": 0.004552161530591547,
+    "GPU Merge SpMV": 0.004952689609490335
+  },
+  "29": {
+    "CPU CSR": 0.22109450490000002,
+    "GPU BCSR (column major, thread per row)": 0.002721995231695473,
+    "GPU BCSR (row major, thread per row)": 0.006784636783413589,
+    "GPU BSR (cuSPARSE, column major)": 0.004703172785229981,
+    "GPU BSR (cuSPARSE, row major)": 0.004570505581796169,
+    "GPU CSR": 0.03357651811093092,
+    "GPU CSR-Vector": 0.004861155222170055,
+    "GPU Merge SpMV": 0.005280164768919349
+  },
+  "3": {
+    "CPU CSR": 0.0017511362999999998,
+    "GPU BCSR (column major, thread per row)": 5.698079949070234e-05,
+    "GPU BCSR (row major, thread per row)": 5.3060799473314546e-05,
+    "GPU BSR (cuSPARSE, column major)": 5.617759979941184e-05,
+    "GPU BSR (cuSPARSE, row major)": 9.675039946159814e-05,
+    "GPU CSR": 0.00011849280199385248,
+    "GPU CSR-Vector": 0.00013791200035484508,
+    "GPU Merge SpMV": 9.183040092466399e-05
+  },
+  "30": {
+    "CPU CSR": 0.23571286314999992,
+    "GPU BCSR (column major, thread per row)": 0.0028610543929971756,
+    "GPU BCSR (row major, thread per row)": 0.007890403224155306,
+    "GPU BSR (cuSPARSE, column major)": 0.004854215914383531,
+    "GPU BSR (cuSPARSE, row major)": 0.004634633637033403,
+    "GPU CSR": 0.03672196958214045,
+    "GPU CSR-Vector": 0.005198894394561648,
+    "GPU Merge SpMV": 0.005669886479154229
+  },
+  "31": {
+    "CPU CSR": 0.25317361755,
+    "GPU BCSR (column major, thread per row)": 0.0030514799989759924,
+    "GPU BCSR (row major, thread per row)": 0.00875010727904737,
+    "GPU BSR (cuSPARSE, column major)": 0.005110361566767097,
+    "GPU BSR (cuSPARSE, row major)": 0.004722091183066368,
+    "GPU CSR": 0.04562712591141462,
+    "GPU CSR-Vector": 0.005547696002759039,
+    "GPU Merge SpMV": 0.006052056024782359
+  },
+  "32": {
+    "CPU CSR": 0.26954180650000004,
+    "GPU BCSR (column major, thread per row)": 0.0031717200297862293,
+    "GPU BCSR (row major, thread per row)": 0.0077761344378814105,
+    "GPU BSR (cuSPARSE, column major)": 0.004736985522322356,
+    "GPU BSR (cuSPARSE, row major)": 0.00493817594833672,
+    "GPU CSR": 0.019073548913002013,
+    "GPU CSR-Vector": 0.005907761608250439,
+    "GPU Merge SpMV": 0.006348551996052265
+  },
+  "4": {
+    "CPU CSR": 0.0032838208,
+    "GPU BCSR (column major, thread per row)": 6.920160049048719e-05,
+    "GPU BCSR (row major, thread per row)": 6.86271992890397e-05,
+    "GPU BSR (cuSPARSE, column major)": 8.013119877432473e-05,
+    "GPU BSR (cuSPARSE, row major)": 7.994720072019845e-05,
+    "GPU CSR": 0.00016636479922453872,
+    "GPU CSR-Vector": 0.0001876640017144382,
+    "GPU Merge SpMV": 0.00014499840035568922
+  },
+  "5": {
+    "CPU CSR": 0.0052014941,
+    "GPU BCSR (column major, thread per row)": 0.00011678880036924966,
+    "GPU BCSR (row major, thread per row)": 0.0001164560002507642,
+    "GPU BSR (cuSPARSE, column major)": 0.00010684480002964847,
+    "GPU BSR (cuSPARSE, row major)": 0.0002523808005207684,
+    "GPU CSR": 0.0004817999986698851,
+    "GPU CSR-Vector": 0.0002472703985404223,
+    "GPU Merge SpMV": 0.00019160960291628726
+  },
+  "6": {
+    "CPU CSR": 0.007341060250000001,
+    "GPU BCSR (column major, thread per row)": 0.00018267199993715622,
+    "GPU BCSR (row major, thread per row)": 0.00015682719968026503,
+    "GPU BSR (cuSPARSE, column major)": 0.00026490879827179015,
+    "GPU BSR (cuSPARSE, row major)": 0.0002640479986439459,
+    "GPU CSR": 0.0005431616009445861,
+    "GPU CSR-Vector": 0.00038084319967310873,
+    "GPU Merge SpMV": 0.00026621919678291304
+  },
+  "7": {
+    "CPU CSR": 0.0111810977,
+    "GPU BCSR (column major, thread per row)": 0.0002567103976616636,
+    "GPU BCSR (row major, thread per row)": 0.00020033440232509748,
+    "GPU BSR (cuSPARSE, column major)": 0.0002722911987802945,
+    "GPU BSR (cuSPARSE, row major)": 0.00027104319888167084,
+    "GPU CSR": 0.0008979695965535938,
+    "GPU CSR-Vector": 0.00045582240127259863,
+    "GPU Merge SpMV": 0.0003591488013626076
+  },
+  "8": {
+    "CPU CSR": 0.013354467650000002,
+    "GPU BCSR (column major, thread per row)": 0.00022591199740418233,
+    "GPU BCSR (row major, thread per row)": 0.0002250159996037837,
+    "GPU BSR (cuSPARSE, column major)": 0.0002753936016233638,
+    "GPU BSR (cuSPARSE, row major)": 0.0002755536028416827,
+    "GPU CSR": 0.0007472128025256097,
+    "GPU CSR-Vector": 0.00052895198459737,
+    "GPU Merge SpMV": 0.00046112640120554715
+  },
+  "9": {
+    "CPU CSR": 0.01675484995,
+    "GPU BCSR (column major, thread per row)": 0.00029092319891788065,
+    "GPU BCSR (row major, thread per row)": 0.0002927583991549909,
+    "GPU BSR (cuSPARSE, column major)": 0.0009604064020095393,
+    "GPU BSR (cuSPARSE, row major)": 0.0009498208004515618,
+    "GPU CSR": 0.001524923200486228,
+    "GPU CSR-Vector": 0.0006186447979416698,
+    "GPU Merge SpMV": 0.0005782015970908106
+  }
+}
