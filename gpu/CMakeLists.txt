@@ -18,4 +18,4 @@ endif()
 
 cuda_add_library(gpu ${GPU_SOURCES})
 target_include_directories(gpu PUBLIC . ${CUDA_INCLUDE_DIRS} ../external/int_fastdiv)
-target_link_libraries(gpu common ${CUDA_cusparse_LIBRARY})
+target_link_libraries(gpu common ${CUDA_cusparse_LIBRARY} cuda_jit)

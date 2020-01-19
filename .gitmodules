@@ -4,3 +4,6 @@
 [submodule "external/int_fastdiv"]
 	path = external/int_fastdiv
 	url = https://github.com/milakov/int_fastdiv.git
+[submodule "external/cuda_jit"]
+	path = external/cuda_jit
+	url = https://github.com/senior-zero/cuda_jit.git

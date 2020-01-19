@@ -6,6 +6,7 @@ set(CMAKE_CXX_STANDARD 17)
 add_subdirectory(gpu)
 add_subdirectory(common)
 add_subdirectory(external/fmt)
+add_subdirectory(external/cuda_jit)
 
 include_directories(external)
 
